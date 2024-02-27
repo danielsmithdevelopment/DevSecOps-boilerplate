@@ -32,3 +32,5 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+packer/linode/variables.auto.pkr.hcl
+packer/linode/variables.auto.pkrvars.hcl
