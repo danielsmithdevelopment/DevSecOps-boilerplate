@@ -1,0 +1,17 @@
+---
+- hosts: all
+  remote_user: root
+  tasks:
+  - name: Install list of necessary packages
+    apt:
+      name: "{{ packages }}"
+    vars:
+      packages:
+      - r-base
+      - python2.7
+      - python-pip
+      - python-setuptools
+      - python3
+      - python3-pip 
+      - python3-setuptools 
+      - python3-dev
