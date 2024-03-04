@@ -1,0 +1,41 @@
+{
+  "variables": {
+	"ansible_playbook_dir": "ansible",
+	"ansible_playbook_file": "ansible/apt_install_packages.yml",
+	"docker_base_image": "ubuntu:22.04",
+	"docker_repository": "{{env `DOCKER_REPOSITORY`}}",
+	"docker_image_version": "{{env `IMAGE_VERSION`}}"
+  },
+  "builders":[{
+	"type": "docker",
+	"image": "{{user `docker_base_image`}}",
+	"commit": true,
+	"changes": []
+  }],
+  "provisioners": [
+	{
+		"type": "shell",
+		"script": "packer/docker/ubuntu-base/install-ansible.sh",
+		"environment_vars": [
+		  "ANSIBLE_VERSION={{user `ansible_version`}}"
+		]
+	},
+	{
+	  "type": "ansible-local",
+	  "playbook_dir": "{{user `ansible_playbook_dir`}}",
+	  "playbook_file": "{{user `ansible_playbook_file`}}"
+	}
+  ],
+  "post-processors": [
+	[
+	  {
+		"type": "docker-tag",
+		"repository": "{{user `docker_repository`}}",
+		"tag": "{{user `docker_image_version`}}"
+	  },
+	  {
+		"type": "docker-push"
+	  }
+	]
+  ]  
+}
