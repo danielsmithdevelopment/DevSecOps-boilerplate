@@ -1,3 +1,6 @@
+docker-push-ubuntu:
+	docker push wbg0x/wbg0x-ubuntu-base:latest
+
 password: 
 	docker run -it --rm alpine mkpasswd -m sha-512 $(password) -s "wbg0x"
 
