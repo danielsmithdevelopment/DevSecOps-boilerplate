@@ -36,3 +36,4 @@ packer/linode/variables.auto.pkr.hcl
 packer/linode/variables.auto.pkrvars.hcl
 terraform/linode/dev/tfplan-create-dev
 terraform/linode/dev/.terraform.lock.hcl
+packer/docker/alpine-base/variables.auto.pkrvars.hcl
