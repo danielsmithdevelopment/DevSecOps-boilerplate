@@ -1,0 +1,7 @@
+name: prod
+description: A Go program to deploy a serverless application on AWS
+runtime: go
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: serverless-aws-go
