@@ -1,0 +1,44 @@
+# server:
+#   http_listen_port: 8265
+
+# distributor:
+#   receivers:
+#     otlp:
+#       protocols:
+#         http:
+#           endpoint: "0.0.0.0:4318"
+#         grpc:
+#           endpoint: "0.0.0.0:4317"
+
+# storage:
+#   trace:
+#     backend: local
+#     local:
+#       path: /tmp/tempo/blocks
+
+# compactor:
+#   compaction:
+#     block_retention: 24h 
+
+server:
+  http_listen_port: 8265
+  grpc_listen_port: 9095
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: "0.0.0.0:4318"
+        grpc:
+          endpoint: "0.0.0.0:4317"
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /tmp/tempo/blocks
+
+compactor:
+  compaction:
+    block_retention: 24h
