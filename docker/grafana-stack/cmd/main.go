@@ -100,5 +100,5 @@ func main() {
 		zap.Time("timestamp", time.Now()))
 
 	// Keep the application running
-	select {} // This replaces os.Exit(0) to keep the metrics endpoint available
+	select {} 
 }
