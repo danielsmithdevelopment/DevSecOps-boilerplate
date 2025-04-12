@@ -1,0 +1,87 @@
+services:
+  task-runner:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
+      - JWT_SECRET=your-secret-key-here
+    depends_on:
+      - postgres
+    networks:
+      - task-runner-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=taskrunner
+      - POSTGRES_PASSWORD=taskrunner
+      - POSTGRES_DB=taskrunner
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - task-runner-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskrunner"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - task-runner-network
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - task-runner-network
+
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - task-runner-network
+
+  tempo:
+    image: grafana/tempo:latest
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - tempo-data:/tmp/tempo
+    ports:
+      - "3200:3200"
+    networks:
+      - task-runner-network
+
+volumes:
+  postgres-data:
+  grafana-data:
+  tempo-data:
+
+networks:
+  task-runner-network:
+    driver: bridge 
