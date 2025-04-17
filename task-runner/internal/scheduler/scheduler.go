@@ -15,22 +15,24 @@ import (
 
 // Scheduler manages task scheduling and execution
 type Scheduler struct {
-	storage  storage.Storage
-	worker   *worker.Worker
-	cron     *cron.Cron
-	mu       sync.RWMutex
-	entries  map[uuid.UUID]cron.EntryID
-	stopChan chan struct{}
+	storage    storage.Storage
+	worker     *worker.Worker
+	cron       *cron.Cron
+	mu         sync.RWMutex
+	entries    map[uuid.UUID]cron.EntryID
+	stopChan   chan struct{}
+	instanceID string
 }
 
 // NewScheduler creates a new scheduler instance
-func NewScheduler(storage storage.Storage, worker *worker.Worker) *Scheduler {
+func NewScheduler(storage storage.Storage, worker *worker.Worker, instanceID string) *Scheduler {
 	return &Scheduler{
-		storage:  storage,
-		worker:   worker,
-		cron:     cron.New(),
-		entries:  make(map[uuid.UUID]cron.EntryID),
-		stopChan: make(chan struct{}),
+		storage:    storage,
+		worker:     worker,
+		cron:       cron.New(),
+		entries:    make(map[uuid.UUID]cron.EntryID),
+		stopChan:   make(chan struct{}),
+		instanceID: instanceID,
 	}
 }
 
@@ -89,41 +91,41 @@ func (s *Scheduler) ScheduleTask(ctx context.Context, task *models.Task) error {
 
 // executeTask executes a task and handles dependencies
 func (s *Scheduler) executeTask(ctx context.Context, task *models.Task) {
-	fmt.Printf("Starting execution of task %s\n", task.ID)
+	fmt.Printf("[Instance %s] Starting execution of task %s\n", s.instanceID, task.ID)
 
 	// Create a new context with timeout for this task execution
-	taskCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	taskCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// Check dependencies
 	if len(task.Dependencies) > 0 {
-		fmt.Printf("Checking dependencies for task %s\n", task.ID)
+		fmt.Printf("[Instance %s] Checking dependencies for task %s\n", s.instanceID, task.ID)
 		for _, depID := range task.Dependencies {
 			// Check if dependency is completed
 			results, err := s.storage.ListTaskResults(taskCtx, depID)
 			if err != nil {
-				fmt.Printf("Error checking dependency %s for task %s: %v\n", depID, task.ID, err)
+				fmt.Printf("[Instance %s] Error checking dependency %s for task %s: %v\n", s.instanceID, depID, task.ID, err)
 				return
 			}
 			if len(results) == 0 {
-				fmt.Printf("No results found for dependency %s of task %s\n", depID, task.ID)
+				fmt.Printf("[Instance %s] No results found for dependency %s of task %s\n", s.instanceID, depID, task.ID)
 				return
 			}
 
 			lastResult := results[len(results)-1]
 			if lastResult.Status != models.TaskStatusCompleted {
-				fmt.Printf("Dependency %s of task %s is not completed (status: %s)\n", depID, task.ID, lastResult.Status)
+				fmt.Printf("[Instance %s] Dependency %s of task %s is not completed (status: %s)\n", s.instanceID, depID, task.ID, lastResult.Status)
 				return
 			}
 		}
-		fmt.Printf("All dependencies completed for task %s\n", task.ID)
+		fmt.Printf("[Instance %s] All dependencies completed for task %s\n", s.instanceID, task.ID)
 	}
 
 	// Execute task
-	fmt.Printf("Executing task %s\n", task.ID)
+	fmt.Printf("[Instance %s] Executing task %s\n", s.instanceID, task.ID)
 	result, err := s.worker.ExecuteTask(taskCtx, task)
 	if err != nil {
-		fmt.Printf("Error executing task %s: %v\n", task.ID, err)
+		fmt.Printf("[Instance %s] Error executing task %s: %v\n", s.instanceID, task.ID, err)
 		// Create a failed result if execution failed
 		result = &models.TaskResult{
 			ID:        uuid.New(),
@@ -133,22 +135,36 @@ func (s *Scheduler) executeTask(ctx context.Context, task *models.Task) {
 			StartTime: time.Now(),
 			EndTime:   time.Now(),
 			Version:   task.Version,
+			Metadata:  map[string]string{"instance_id": s.instanceID},
 		}
 		if err := s.storage.CreateTaskResult(taskCtx, result); err != nil {
-			fmt.Printf("Error storing failed result for task %s: %v\n", task.ID, err)
+			fmt.Printf("[Instance %s] Error storing failed result for task %s: %v\n", s.instanceID, task.ID, err)
 		}
 		return
 	}
-	fmt.Printf("Task %s executed successfully with status %s\n", task.ID, result.Status)
+	fmt.Printf("[Instance %s] Task %s executed successfully with status %s\n", s.instanceID, task.ID, result.Status)
+
+	// Add instance ID to result metadata
+	if result.Metadata == nil {
+		result.Metadata = make(map[string]string)
+	}
+	result.Metadata["instance_id"] = s.instanceID
+
+	// Store the successful result
+	if err := s.storage.CreateTaskResult(taskCtx, result); err != nil {
+		fmt.Printf("[Instance %s] Error storing successful result for task %s: %v\n", s.instanceID, task.ID, err)
+		return
+	}
+	fmt.Printf("[Instance %s] Result stored successfully for task %s\n", s.instanceID, task.ID)
 
 	// Update task status based on the result
 	task.Status = result.Status
 	task.UpdatedAt = time.Now()
 	if err := s.storage.UpdateTask(taskCtx, task); err != nil {
-		fmt.Printf("Error updating task %s status: %v\n", task.ID, err)
+		fmt.Printf("[Instance %s] Error updating task %s status: %v\n", s.instanceID, task.ID, err)
 		return
 	}
-	fmt.Printf("Task %s status updated to %s\n", task.ID, task.Status)
+	fmt.Printf("[Instance %s] Task %s status updated to %s\n", s.instanceID, task.ID, task.Status)
 }
 
 // RemoveTask removes a task from the scheduler
@@ -166,7 +182,7 @@ func (s *Scheduler) RemoveTask(ctx context.Context, taskID uuid.UUID) error {
 
 // ExecuteTaskNow executes a task immediately without scheduling
 func (s *Scheduler) ExecuteTaskNow(ctx context.Context, task *models.Task) error {
-	fmt.Printf("Starting immediate execution of task %s\n", task.ID)
+	fmt.Printf("[Instance %s] Starting immediate execution of task %s\n", s.instanceID, task.ID)
 	
 	// Create a copy of the task to avoid race conditions
 	taskCopy := *task
@@ -176,10 +192,10 @@ func (s *Scheduler) ExecuteTaskNow(ctx context.Context, task *models.Task) error
 	defer cancel()
 	
 	// Execute task directly and wait for result
-	fmt.Printf("Executing task %s with worker\n", task.ID)
+	fmt.Printf("[Instance %s] Executing task %s with worker\n", s.instanceID, task.ID)
 	result, err := s.worker.ExecuteTask(execCtx, &taskCopy)
 	if err != nil {
-		fmt.Printf("Error executing task %s: %v\n", task.ID, err)
+		fmt.Printf("[Instance %s] Error executing task %s: %v\n", s.instanceID, task.ID, err)
 		// Create a failed result if execution failed
 		result = &models.TaskResult{
 			ID:        uuid.New(),
@@ -189,32 +205,39 @@ func (s *Scheduler) ExecuteTaskNow(ctx context.Context, task *models.Task) error
 			StartTime: time.Now(),
 			EndTime:   time.Now(),
 			Version:   task.Version,
+			Metadata:  map[string]string{"instance_id": s.instanceID},
 		}
-		fmt.Printf("Storing failed result for task %s\n", task.ID)
+		fmt.Printf("[Instance %s] Storing failed result for task %s\n", s.instanceID, task.ID)
 		if err := s.storage.CreateTaskResult(execCtx, result); err != nil {
-			fmt.Printf("Error storing failed result for task %s: %v\n", task.ID, err)
+			fmt.Printf("[Instance %s] Error storing failed result for task %s: %v\n", s.instanceID, task.ID, err)
 			return fmt.Errorf("failed to store failed result: %w", err)
 		}
 		return fmt.Errorf("failed to execute task: %w", err)
 	}
 
+	// Add instance ID to result metadata
+	if result.Metadata == nil {
+		result.Metadata = make(map[string]string)
+	}
+	result.Metadata["instance_id"] = s.instanceID
+
 	// Store the successful result
-	fmt.Printf("Task %s executed successfully, storing result\n", task.ID)
+	fmt.Printf("[Instance %s] Task %s executed successfully, storing result\n", s.instanceID, task.ID)
 	if err := s.storage.CreateTaskResult(execCtx, result); err != nil {
-		fmt.Printf("Error storing successful result for task %s: %v\n", task.ID, err)
+		fmt.Printf("[Instance %s] Error storing successful result for task %s: %v\n", s.instanceID, task.ID, err)
 		return fmt.Errorf("failed to store task result: %w", err)
 	}
-	fmt.Printf("Result stored successfully for task %s\n", task.ID)
+	fmt.Printf("[Instance %s] Result stored successfully for task %s\n", s.instanceID, task.ID)
 
 	// Update task status based on the result
 	task.Status = result.Status
 	task.UpdatedAt = time.Now()
-	fmt.Printf("Updating task %s status to %s\n", task.ID, task.Status)
+	fmt.Printf("[Instance %s] Updating task %s status to %s\n", s.instanceID, task.ID, task.Status)
 	if err := s.storage.UpdateTask(execCtx, task); err != nil {
-		fmt.Printf("Error updating task %s status: %v\n", task.ID, err)
+		fmt.Printf("[Instance %s] Error updating task %s status: %v\n", s.instanceID, task.ID, err)
 		return fmt.Errorf("failed to update task status: %w", err)
 	}
-	fmt.Printf("Task %s status updated successfully\n", task.ID)
+	fmt.Printf("[Instance %s] Task %s status updated successfully\n", s.instanceID, task.ID)
 
 	return nil
 } 

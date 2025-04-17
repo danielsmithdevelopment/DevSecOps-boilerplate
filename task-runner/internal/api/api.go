@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ type API struct {
 	scheduler *scheduler.Scheduler
 	router    *gin.Engine
 	jwtSecret []byte
+	startTime time.Time
 }
 
 // NewAPI creates a new API instance
@@ -28,6 +30,7 @@ func NewAPI(storage storage.Storage, scheduler *scheduler.Scheduler, jwtSecret [
 		scheduler: scheduler,
 		router:    gin.Default(),
 		jwtSecret: jwtSecret,
+		startTime: time.Now(),
 	}
 
 	api.setupRoutes()
@@ -39,6 +42,7 @@ func (a *API) setupRoutes() {
 	// Public routes
 	a.router.POST("/auth", a.handleAuth)
 	a.router.GET("/health", a.handleHealth)
+	a.router.GET("/metrics", a.handleMetrics)
 
 	// Protected routes
 	protected := a.router.Group("/")
@@ -51,6 +55,84 @@ func (a *API) setupRoutes() {
 		protected.GET("/task/status/:id", a.handleTaskStatus)
 		protected.GET("/task/list", a.handleListTasks)
 	}
+}
+
+// handleMetrics returns Prometheus-formatted metrics
+func (a *API) handleMetrics(c *gin.Context) {
+	// Get task results for the last hour
+	ctx := c.Request.Context()
+	results, err := a.storage.ListTaskResults(ctx, uuid.Nil) // This will get all results
+	if err != nil {
+		fmt.Printf("Error getting task results: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get task results"})
+		return
+	}
+
+	fmt.Printf("Found %d task results\n", len(results))
+
+	// Count tasks by instance and status
+	instanceTaskCounts := make(map[string]map[string]int)
+	instanceDurations := make(map[string][]float64)
+
+	for _, result := range results {
+		instanceID := result.Metadata["instance_id"]
+		if instanceID == "" {
+			instanceID = "unknown"
+		}
+
+		fmt.Printf("Processing result for instance %s with status %s\n", instanceID, result.Status)
+
+		// Initialize maps if needed
+		if _, ok := instanceTaskCounts[instanceID]; !ok {
+			instanceTaskCounts[instanceID] = make(map[string]int)
+		}
+
+		// Count tasks by status
+		instanceTaskCounts[instanceID][string(result.Status)]++
+
+		// Calculate duration
+		duration := result.EndTime.Sub(result.StartTime).Seconds()
+		instanceDurations[instanceID] = append(instanceDurations[instanceID], duration)
+	}
+
+	// Build metrics output
+	metrics := fmt.Sprintf(`# HELP task_runner_info Information about the task runner service
+# TYPE task_runner_info gauge
+task_runner_info{version="1.0.0"} 1
+
+# HELP task_runner_uptime_seconds The number of seconds since the service started
+# TYPE task_runner_uptime_seconds gauge
+task_runner_uptime_seconds %d
+
+# HELP task_runner_tasks_total Total number of tasks executed by instance and status
+# TYPE task_runner_tasks_total counter
+`, int(time.Since(a.startTime).Seconds()))
+
+	// Add task counts by instance and status
+	for instanceID, statusCounts := range instanceTaskCounts {
+		for status, count := range statusCounts {
+			metrics += fmt.Sprintf("task_runner_tasks_total{instance=\"%s\",status=\"%s\"} %d\n", 
+				instanceID, status, count)
+		}
+	}
+
+	// Add average duration by instance
+	metrics += "\n# HELP task_runner_task_duration_seconds Average task execution duration by instance\n"
+	metrics += "# TYPE task_runner_task_duration_seconds gauge\n"
+	for instanceID, durations := range instanceDurations {
+		var total float64
+		for _, d := range durations {
+			total += d
+		}
+		avg := total / float64(len(durations))
+		metrics += fmt.Sprintf("task_runner_task_duration_seconds{instance=\"%s\"} %.2f\n", 
+			instanceID, avg)
+	}
+
+	fmt.Printf("Generated metrics:\n%s\n", metrics)
+
+	c.Header("Content-Type", "text/plain")
+	c.String(http.StatusOK, metrics)
 }
 
 // authMiddleware handles JWT authentication

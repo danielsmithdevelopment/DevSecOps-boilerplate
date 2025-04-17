@@ -2,10 +2,11 @@ services:
   task-runner:
     build: .
     ports:
-      - "8080:8080"
+      - "8080-8084:8080"
     environment:
       - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
       - JWT_SECRET=your-secret-key-here
+      - INSTANCE_ID=replica-${REPLICA_NUMBER:-1}
     depends_on:
       - postgres
     networks:

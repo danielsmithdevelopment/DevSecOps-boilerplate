@@ -22,6 +22,12 @@ func main() {
 	addr := flag.String("addr", ":8080", "Server address")
 	flag.Parse()
 
+	// Get instance ID from environment variable
+	instanceID := os.Getenv("INSTANCE_ID")
+	if instanceID == "" {
+		instanceID = "default"
+	}
+
 	// Create context that can be cancelled
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -41,7 +47,7 @@ func main() {
 	worker := worker.NewWorker(store)
 
 	// Initialize scheduler
-	scheduler := scheduler.NewScheduler(store, worker)
+	scheduler := scheduler.NewScheduler(store, worker, instanceID)
 
 	// Start scheduler
 	if err := scheduler.Start(ctx); err != nil {

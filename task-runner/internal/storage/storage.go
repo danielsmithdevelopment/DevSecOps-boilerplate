@@ -82,8 +82,21 @@ func (s *PostgresStorage) InitSchema(ctx context.Context) error {
 			error TEXT,
 			start_time TIMESTAMP NOT NULL,
 			end_time TIMESTAMP NOT NULL,
-			version INTEGER NOT NULL
+			version INTEGER NOT NULL,
+			metadata JSONB
 		)`,
+		// Add metadata column if it doesn't exist
+		`DO $$ 
+		BEGIN 
+			IF NOT EXISTS (
+				SELECT 1 
+				FROM information_schema.columns 
+				WHERE table_name = 'task_results' 
+				AND column_name = 'metadata'
+			) THEN 
+				ALTER TABLE task_results ADD COLUMN metadata JSONB;
+			END IF;
+		END $$;`,
 	}
 
 	for _, query := range queries {
@@ -147,11 +160,24 @@ func (s *PostgresStorage) CreateTask(ctx context.Context, task *models.Task) err
 
 // CreateTaskResult implements the Storage interface
 func (s *PostgresStorage) CreateTaskResult(ctx context.Context, result *models.TaskResult) error {
+	// Convert metadata to JSON if it exists
+	var metadataJSON []byte
+	var err error
+	if result.Metadata != nil {
+		metadataJSON, err = json.Marshal(result.Metadata)
+		if err != nil {
+			return fmt.Errorf("failed to marshal metadata: %w", err)
+		}
+	}
+
 	query := `
-		INSERT INTO task_results (id, task_id, status, output, error, start_time, end_time, version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`
-	_, err := s.db.ExecContext(ctx, query,
+		INSERT INTO task_results (
+			id, task_id, status, output, error, start_time, end_time, version, metadata
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9
+		)`
+
+	_, err = s.db.ExecContext(ctx, query,
 		result.ID,
 		result.TaskID,
 		result.Status,
@@ -160,6 +186,7 @@ func (s *PostgresStorage) CreateTaskResult(ctx context.Context, result *models.T
 		result.StartTime,
 		result.EndTime,
 		result.Version,
+		metadataJSON,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create task result: %w", err)
@@ -184,11 +211,12 @@ func (s *PostgresStorage) CleanupOldResults(ctx context.Context, olderThan time.
 // GetTaskResult implements the Storage interface
 func (s *PostgresStorage) GetTaskResult(ctx context.Context, id uuid.UUID) (*models.TaskResult, error) {
 	query := `
-		SELECT id, task_id, status, output, error, start_time, end_time, version
+		SELECT id, task_id, status, output, error, start_time, end_time, version, metadata
 		FROM task_results
 		WHERE id = $1
 	`
 	result := &models.TaskResult{}
+	var metadataJSON []byte
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
 		&result.ID,
 		&result.TaskID,
@@ -198,6 +226,7 @@ func (s *PostgresStorage) GetTaskResult(ctx context.Context, id uuid.UUID) (*mod
 		&result.StartTime,
 		&result.EndTime,
 		&result.Version,
+		&metadataJSON,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("task result not found: %s", id)
@@ -205,18 +234,39 @@ func (s *PostgresStorage) GetTaskResult(ctx context.Context, id uuid.UUID) (*mod
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task result: %w", err)
 	}
+
+	// Unmarshal metadata if it exists
+	if len(metadataJSON) > 0 {
+		if err := json.Unmarshal(metadataJSON, &result.Metadata); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
+		}
+	}
+
 	return result, nil
 }
 
 // ListTaskResults implements the Storage interface
 func (s *PostgresStorage) ListTaskResults(ctx context.Context, taskID uuid.UUID) ([]*models.TaskResult, error) {
-	query := `
-		SELECT id, task_id, status, output, error, start_time, end_time, version
-		FROM task_results
-		WHERE task_id = $1
-		ORDER BY start_time DESC
-	`
-	rows, err := s.db.QueryContext(ctx, query, taskID)
+	var query string
+	var args []interface{}
+	
+	if taskID == uuid.Nil {
+		query = `
+			SELECT id, task_id, status, output, error, start_time, end_time, version, metadata
+			FROM task_results
+			ORDER BY start_time DESC
+		`
+	} else {
+		query = `
+			SELECT id, task_id, status, output, error, start_time, end_time, version, metadata
+			FROM task_results
+			WHERE task_id = $1
+			ORDER BY start_time DESC
+		`
+		args = append(args, taskID)
+	}
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list task results: %w", err)
 	}
@@ -225,6 +275,7 @@ func (s *PostgresStorage) ListTaskResults(ctx context.Context, taskID uuid.UUID)
 	var results []*models.TaskResult
 	for rows.Next() {
 		result := &models.TaskResult{}
+		var metadataJSON []byte
 		err := rows.Scan(
 			&result.ID,
 			&result.TaskID,
@@ -234,10 +285,19 @@ func (s *PostgresStorage) ListTaskResults(ctx context.Context, taskID uuid.UUID)
 			&result.StartTime,
 			&result.EndTime,
 			&result.Version,
+			&metadataJSON,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan task result: %w", err)
 		}
+
+		// Unmarshal metadata if it exists
+		if len(metadataJSON) > 0 {
+			if err := json.Unmarshal(metadataJSON, &result.Metadata); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
+			}
+		}
+
 		results = append(results, result)
 	}
 	if err := rows.Err(); err != nil {
