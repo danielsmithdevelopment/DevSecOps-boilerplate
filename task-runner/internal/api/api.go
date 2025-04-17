@@ -49,6 +49,7 @@ func (a *API) setupRoutes() {
 		protected.DELETE("/task/delete/:id", a.handleDeleteTask)
 		protected.POST("/task/invoke/:id", a.handleInvokeTask)
 		protected.GET("/task/status/:id", a.handleTaskStatus)
+		protected.GET("/task/list", a.handleListTasks)
 	}
 }
 
@@ -248,6 +249,17 @@ func (a *API) handleHealth(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+}
+
+// handleListTasks handles listing all tasks
+func (a *API) handleListTasks(c *gin.Context) {
+	tasks, err := a.storage.ListTasks(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list tasks"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
 }
 
 // Run starts the API server
