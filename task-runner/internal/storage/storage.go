@@ -26,6 +26,11 @@ type Storage interface {
 	GetTaskResult(ctx context.Context, id uuid.UUID) (*models.TaskResult, error)
 	ListTaskResults(ctx context.Context, taskID uuid.UUID) ([]*models.TaskResult, error)
 	
+	// Task locking operations
+	TryLockTask(ctx context.Context, taskID uuid.UUID, instanceID string) (bool, error)
+	ReleaseLock(ctx context.Context, taskID uuid.UUID, instanceID string) error
+	RefreshLock(ctx context.Context, taskID uuid.UUID, instanceID string) error
+	
 	// Cleanup
 	CleanupOldResults(ctx context.Context, olderThan time.Duration) error
 }
@@ -84,6 +89,12 @@ func (s *PostgresStorage) InitSchema(ctx context.Context) error {
 			end_time TIMESTAMP NOT NULL,
 			version INTEGER NOT NULL,
 			metadata JSONB
+		)`,
+		`CREATE TABLE IF NOT EXISTS task_locks (
+			task_id UUID PRIMARY KEY REFERENCES tasks(id),
+			instance_id VARCHAR(255) NOT NULL,
+			locked_at TIMESTAMP NOT NULL,
+			expires_at TIMESTAMP NOT NULL
 		)`,
 		// Add metadata column if it doesn't exist
 		`DO $$ 
@@ -541,6 +552,85 @@ func (s *PostgresStorage) ListTasks(ctx context.Context) ([]*models.Task, error)
 	}
 
 	return tasks, nil
+}
+
+// TryLockTask attempts to acquire a lock for a task
+func (s *PostgresStorage) TryLockTask(ctx context.Context, taskID uuid.UUID, instanceID string) (bool, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Clean up expired locks first
+	_, err = tx.ExecContext(ctx, "DELETE FROM task_locks WHERE expires_at < NOW()")
+	if err != nil {
+		return false, fmt.Errorf("failed to clean up expired locks: %w", err)
+	}
+
+	// Try to insert a new lock
+	query := `
+		INSERT INTO task_locks (task_id, instance_id, locked_at, expires_at)
+		VALUES ($1, $2, NOW(), NOW() + INTERVAL '30 seconds')
+		ON CONFLICT (task_id) DO NOTHING
+		RETURNING task_id
+	`
+	var lockedTaskID uuid.UUID
+	err = tx.QueryRowContext(ctx, query, taskID, instanceID).Scan(&lockedTaskID)
+	if err == sql.ErrNoRows {
+		// Lock was not acquired
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to acquire lock: %w", err)
+	}
+
+	return true, tx.Commit()
+}
+
+// ReleaseLock releases a task lock
+func (s *PostgresStorage) ReleaseLock(ctx context.Context, taskID uuid.UUID, instanceID string) error {
+	query := `
+		DELETE FROM task_locks
+		WHERE task_id = $1 AND instance_id = $2
+	`
+	result, err := s.db.ExecContext(ctx, query, taskID, instanceID)
+	if err != nil {
+		return fmt.Errorf("failed to release lock: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("lock not found or already released")
+	}
+
+	return nil
+}
+
+// RefreshLock extends the expiration time of a task lock
+func (s *PostgresStorage) RefreshLock(ctx context.Context, taskID uuid.UUID, instanceID string) error {
+	query := `
+		UPDATE task_locks
+		SET expires_at = NOW() + INTERVAL '30 seconds'
+		WHERE task_id = $1 AND instance_id = $2
+	`
+	result, err := s.db.ExecContext(ctx, query, taskID, instanceID)
+	if err != nil {
+		return fmt.Errorf("failed to refresh lock: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("lock not found or already expired")
+	}
+
+	return nil
 }
 
 // Additional methods would be implemented here... 

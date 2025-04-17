@@ -1,12 +1,12 @@
 services:
-  task-runner:
+  task-runner-1:
     build: .
     ports:
-      - "8080-8084:8080"
+      - "8080:8080"
     environment:
       - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
       - JWT_SECRET=your-secret-key-here
-      - INSTANCE_ID=replica-${REPLICA_NUMBER:-1}
+      - INSTANCE_ID=task-runner-1
     depends_on:
       - postgres
     networks:
@@ -14,6 +14,86 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  task-runner-2:
+    build: .
+    ports:
+      - "8081:8080"
+    environment:
+      - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
+      - JWT_SECRET=your-secret-key-here
+      - INSTANCE_ID=task-runner-2
+    depends_on:
+      - postgres
+    networks:
+      - task-runner-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  task-runner-3:
+    build: .
+    ports:
+      - "8082:8080"
+    environment:
+      - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
+      - JWT_SECRET=your-secret-key-here
+      - INSTANCE_ID=task-runner-3
+    depends_on:
+      - postgres
+    networks:
+      - task-runner-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  task-runner-4:
+    build: .
+    ports:
+      - "8083:8080"
+    environment:
+      - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
+      - JWT_SECRET=your-secret-key-here
+      - INSTANCE_ID=task-runner-4
+    depends_on:
+      - postgres
+    networks:
+      - task-runner-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  task-runner-5:
+    build: .
+    ports:
+      - "8084:8080"
+    environment:
+      - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
+      - JWT_SECRET=your-secret-key-here
+      - INSTANCE_ID=task-runner-5
+    depends_on:
+      - postgres
+    networks:
+      - task-runner-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/health"]
       interval: 30s
       timeout: 10s
       retries: 3

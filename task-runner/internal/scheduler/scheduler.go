@@ -93,9 +93,45 @@ func (s *Scheduler) ScheduleTask(ctx context.Context, task *models.Task) error {
 func (s *Scheduler) executeTask(ctx context.Context, task *models.Task) {
 	fmt.Printf("[Instance %s] Starting execution of task %s\n", s.instanceID, task.ID)
 
+	// Try to acquire a lock for this task
+	locked, err := s.storage.TryLockTask(ctx, task.ID, s.instanceID)
+	if err != nil {
+		fmt.Printf("[Instance %s] Error acquiring lock for task %s: %v\n", s.instanceID, task.ID, err)
+		return
+	}
+	if !locked {
+		fmt.Printf("[Instance %s] Task %s is already being executed by another instance\n", s.instanceID, task.ID)
+		return
+	}
+
 	// Create a new context with timeout for this task execution
 	taskCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	// Start a goroutine to refresh the lock periodically
+	lockRefreshTicker := time.NewTicker(10 * time.Second)
+	defer lockRefreshTicker.Stop()
+
+	go func() {
+		for {
+			select {
+			case <-lockRefreshTicker.C:
+				if err := s.storage.RefreshLock(taskCtx, task.ID, s.instanceID); err != nil {
+					fmt.Printf("[Instance %s] Error refreshing lock for task %s: %v\n", s.instanceID, task.ID, err)
+					return
+				}
+			case <-taskCtx.Done():
+				return
+			}
+		}
+	}()
+
+	// Ensure we release the lock when we're done
+	defer func() {
+		if err := s.storage.ReleaseLock(taskCtx, task.ID, s.instanceID); err != nil {
+			fmt.Printf("[Instance %s] Error releasing lock for task %s: %v\n", s.instanceID, task.ID, err)
+		}
+	}()
 
 	// Check dependencies
 	if len(task.Dependencies) > 0 {
