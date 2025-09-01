@@ -2,7 +2,7 @@ name: logging
 services:
   app:
     build: .
-    ports: [8080:8080]
+    ports: [4200:4200]
     labels: { logging: "promtail" }
 
   loki:
@@ -24,3 +24,9 @@ services:
     ports: [3000:3000]
     volumes:
       - ./configs/grafana.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports: [9090:9090]
+    volumes:
+      - ./configs/prometheus.yaml:/etc/prometheus/prometheus.yml
