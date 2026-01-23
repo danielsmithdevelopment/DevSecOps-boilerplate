@@ -49,6 +49,12 @@ func (a *API) authMiddleware() gin.HandlerFunc {
 		if walletAddress, ok := claims["wallet_address"].(string); ok {
 			c.Set("wallet_address", walletAddress)
 		}
+		if email, ok := claims["email"].(string); ok {
+			c.Set("email", email)
+		}
+		if authMethod, ok := claims["auth_method"].(string); ok {
+			c.Set("auth_method", authMethod)
+		}
 
 		c.Next()
 	}

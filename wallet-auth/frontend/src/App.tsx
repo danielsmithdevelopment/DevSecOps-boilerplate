@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { WalletConnect } from './components/WalletConnect';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { EmailVerify } from './components/EmailAuth';
 
 function Home() {
   return (
@@ -32,6 +33,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/email-verify" element={<EmailVerify />} />
         <Route
           path="/dashboard"
           element={

@@ -21,12 +21,34 @@ export const useAuth = () => {
 
   const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '';
 
-  // Initialize provider
+  // Initialize provider and check authentication
   useEffect(() => {
     const initProvider = async () => {
+      // First, check if user is authenticated via token (works for both email and wallet)
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const user = await authAPI.getMe();
+          setState((prev) => ({
+            ...prev,
+            user,
+            isAuthenticated: true,
+            isLoading: false,
+          }));
+          // Continue to initialize provider in background (non-blocking)
+        } catch (error) {
+          console.error('Failed to load user:', error);
+          localStorage.removeItem('token');
+          // Continue to initialize provider
+        }
+      }
+
+      // Initialize WalletConnect provider (optional, doesn't block authentication)
       if (!projectId) {
         console.warn('WalletConnect Project ID not set');
-        setState((prev) => ({ ...prev, isLoading: false }));
+        if (!token) {
+          setState((prev) => ({ ...prev, isLoading: false }));
+        }
         return;
       }
 
@@ -46,35 +68,22 @@ export const useAuth = () => {
 
         setState((prev) => ({ ...prev, provider }));
 
-        // Check if already connected
+        // Check if wallet is already connected
         if (provider.accounts.length > 0) {
           const address = provider.accounts[0];
           setState((prev) => ({ ...prev, address }));
-          // Load user if token exists
-          const token = localStorage.getItem('token');
-          if (token) {
-            try {
-              const user = await authAPI.getMe();
-              setState((prev) => ({
-                ...prev,
-                user,
-                isAuthenticated: true,
-                isLoading: false,
-              }));
-            } catch (error) {
-              console.error('Failed to load user:', error);
-              localStorage.removeItem('token');
-              setState((prev) => ({ ...prev, isLoading: false }));
-            }
-          } else {
-            setState((prev) => ({ ...prev, isLoading: false }));
-          }
-        } else {
+        }
+
+        // If we didn't load user from token above, we're done loading
+        if (!token) {
           setState((prev) => ({ ...prev, isLoading: false }));
         }
       } catch (error) {
         console.error('Failed to initialize provider:', error);
-        setState((prev) => ({ ...prev, isLoading: false }));
+        // Provider initialization failure shouldn't block authentication
+        if (!token) {
+          setState((prev) => ({ ...prev, isLoading: false }));
+        }
       }
     };
 
@@ -108,6 +117,52 @@ export const useAuth = () => {
       }));
     }
   }, []);
+
+  // Sign in with email (after email verification)
+  const signInWithEmail = useCallback(async (token: string) => {
+    try {
+      localStorage.setItem('token', token);
+      const user = await authAPI.getMe();
+      setState((prev) => ({
+        ...prev,
+        user,
+        isAuthenticated: true,
+      }));
+      return user;
+    } catch (error) {
+      console.error('Failed to sign in with email:', error);
+      throw error;
+    }
+  }, []);
+
+  // Add wallet to email user
+  const addWallet = useCallback(async (address: string) => {
+    if (!state.provider) {
+      throw new Error('Provider not initialized');
+    }
+
+    try {
+      // Get challenge from backend
+      const { message } = await authAPI.addWallet(address);
+
+      // Request signature from wallet
+      const signature = await state.provider.request({
+        method: 'personal_sign',
+        params: [message, address],
+      });
+
+      // Verify signature with backend
+      await authAPI.verifyWalletAdd(message, signature as string);
+
+      // Reload user to get updated data
+      await loadUser();
+
+      return address;
+    } catch (error) {
+      console.error('Failed to add wallet:', error);
+      throw error;
+    }
+  }, [state.provider, loadUser]);
 
   // Connect wallet
   const connect = useCallback(async () => {
@@ -198,6 +253,8 @@ export const useAuth = () => {
     signIn,
     signOut,
     loadUser,
+    signInWithEmail,
+    addWallet,
     provider: state.provider,
   };
 };

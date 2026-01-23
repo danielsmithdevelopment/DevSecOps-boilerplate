@@ -33,7 +33,9 @@ export interface VerifyResponse {
 
 export interface User {
   id: string;
-  wallet_address: string;
+  wallet_address?: string;
+  email?: string;
+  email_verified?: boolean;
   created_at: string;
   last_login?: string;
 }
@@ -67,6 +69,79 @@ export const authAPI = {
 
   getMe: async (): Promise<User> => {
     const response = await api.get<User>('/auth/me');
+    return response.data;
+  },
+
+  // Email authentication
+  emailSignup: async (email: string): Promise<{ 
+    message: string;
+    email_sent?: boolean;
+    email_service_enabled?: boolean;
+    verification_token?: string;
+    verification_url?: string;
+  }> => {
+    const response = await api.post<{ 
+      message: string;
+      email_sent?: boolean;
+      email_service_enabled?: boolean;
+      verification_token?: string;
+      verification_url?: string;
+    }>('/auth/email/signup', { email });
+    return response.data;
+  },
+
+  verifyEmail: async (token: string): Promise<VerifyResponse> => {
+    const response = await api.get<VerifyResponse>('/auth/email/verify', {
+      params: { token },
+    });
+    return response.data;
+  },
+
+  resendVerification: async (email: string): Promise<{ 
+    message: string;
+    email_sent?: boolean;
+    email_service_enabled?: boolean;
+    verification_token?: string;
+    verification_url?: string;
+  }> => {
+    const response = await api.post<{ 
+      message: string;
+      email_sent?: boolean;
+      email_service_enabled?: boolean;
+      verification_token?: string;
+      verification_url?: string;
+    }>('/auth/email/resend', { email });
+    return response.data;
+  },
+
+  // Linking methods
+  addWallet: async (address: string): Promise<ChallengeResponse> => {
+    const response = await api.post<ChallengeResponse>('/auth/wallet/add', { address });
+    return response.data;
+  },
+
+  verifyWalletAdd: async (message: string, signature: string): Promise<{ message: string }> => {
+    const response = await api.post<{ message: string }>('/auth/wallet/verify', {
+      message,
+      signature,
+    });
+    return response.data;
+  },
+
+  addEmail: async (email: string): Promise<{ 
+    message: string;
+    email_sent?: boolean;
+    email_service_enabled?: boolean;
+    verification_token?: string;
+    verification_url?: string;
+  }> => {
+    const response = await api.post<{ 
+      message: string;
+      email_sent?: boolean;
+      email_service_enabled?: boolean;
+      verification_token?: string;
+      verification_url?: string;
+    }>('/auth/email/add', { email });
     return response.data;
   },
 };
