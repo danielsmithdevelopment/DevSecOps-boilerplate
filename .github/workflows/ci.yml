@@ -208,7 +208,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build image
-        run: docker build -t scan-target -f "${{ matrix.file }}" "${{ matrix.context }}"
+        run: |
+          for attempt in 1 2 3; do
+            docker build -t scan-target -f "${{ matrix.file }}" "${{ matrix.context }}" && exit 0
+            echo "Docker build attempt ${attempt} failed, retrying..."
+            sleep 10
+          done
+          exit 1
 
       - name: Scan image
         uses: aquasecurity/trivy-action@0.35.0
