@@ -28,6 +28,7 @@ jobs:
           - pulumi/aws/prod
           - docker/grafana-stack
           - development/go/worker-cluster
+          - wallet-auth/backend
     steps:
       - uses: actions/checkout@v4
 
