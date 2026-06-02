@@ -112,4 +112,4 @@ func (w *Worker) executeHTTPTask(ctx context.Context, task *models.Task) (string
 	}
 
 	return string(output), nil
-} 
+}

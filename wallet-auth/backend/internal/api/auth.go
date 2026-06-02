@@ -20,11 +20,11 @@ import (
 
 // API handles HTTP endpoints
 type API struct {
-	storage     storage.Storage
-	verifier    *siwe.Verifier
+	storage      storage.Storage
+	verifier     *siwe.Verifier
 	emailService *email.EmailService
-	jwtSecret   []byte
-	router      *gin.Engine
+	jwtSecret    []byte
+	router       *gin.Engine
 }
 
 // NewAPI creates a new API instance
@@ -62,7 +62,7 @@ func (a *API) setupRoutes() {
 	a.router.GET("/health", a.handleHealth)
 	a.router.GET("/auth/challenge", a.handleChallenge)
 	a.router.POST("/auth/verify", a.handleVerify)
-	
+
 	// Email auth routes
 	a.router.POST("/auth/email/signup", a.handleEmailSignup)
 	a.router.GET("/auth/email/verify", a.handleEmailVerify)
@@ -170,7 +170,7 @@ func (a *API) handleVerify(c *gin.Context) {
 	log.Printf("DEBUG: Recovered address from signature: %q", recoveredAddress)
 
 	// Check if recovered address matches
-	if strings.ToLower(recoveredAddress) != strings.ToLower(address) {
+	if !strings.EqualFold(recoveredAddress, address) {
 		errorMsg := fmt.Sprintf("address mismatch: recovered %s (len:%d), expected %s (len:%d)", recoveredAddress, len(recoveredAddress), address, len(address))
 		log.Printf("DEBUG: %s", errorMsg)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": errorMsg})
@@ -180,10 +180,10 @@ func (a *API) handleVerify(c *gin.Context) {
 	// Get user using recovered address (authoritative)
 	// The user should have been created during the challenge request
 	lookupAddress := strings.ToLower(strings.TrimSpace(recoveredAddress))
-	
+
 	// Log for debugging
 	log.Printf("DEBUG: Looking up user with address: %q (recovered: %q, from message: %q)", lookupAddress, recoveredAddress, address)
-	
+
 	user, err := a.storage.GetUserByAddress(c.Request.Context(), lookupAddress)
 	if err != nil {
 		// Log the error immediately
@@ -199,18 +199,18 @@ func (a *API) handleVerify(c *gin.Context) {
 		} else {
 			fmt.Fprintf(os.Stderr, "ERROR: Fallback lookup also failed: %v\n", fallbackErr)
 			// Make error message very explicit and include all details
-			errorDetails := fmt.Sprintf("USER_NOT_FOUND: lookup_addr=%q(len=%d) recovered_addr=%q(len=%d) message_addr=%q(len=%d) primary_error=%v fallback_error=%v", 
+			errorDetails := fmt.Sprintf("USER_NOT_FOUND: lookup_addr=%q(len=%d) recovered_addr=%q(len=%d) message_addr=%q(len=%d) primary_error=%v fallback_error=%v",
 				lookupAddress, len(lookupAddress), recoveredAddress, len(recoveredAddress), address, len(address), err, fallbackErr)
 			fmt.Fprintf(os.Stderr, "ERROR: Returning error: %s\n", errorDetails)
 			// Return detailed error with additional debug info
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": errorDetails,
 				"debug": gin.H{
-					"lookup_address": lookupAddress,
+					"lookup_address":    lookupAddress,
 					"recovered_address": recoveredAddress,
-					"message_address": address,
-					"primary_error": err.Error(),
-					"fallback_error": fallbackErr.Error(),
+					"message_address":   address,
+					"primary_error":     err.Error(),
+					"fallback_error":    fallbackErr.Error(),
 				},
 			})
 			return
@@ -226,7 +226,7 @@ func (a *API) handleVerify(c *gin.Context) {
 
 	// Update last login
 	if err := a.storage.UpdateLastLogin(c.Request.Context(), user.ID); err != nil {
-		// Log error but don't fail the request
+		log.Printf("failed to update last login: %v", err)
 	}
 
 	// Generate JWT token
@@ -349,8 +349,8 @@ func (a *API) handleEmailSignup(c *gin.Context) {
 	}
 
 	response := gin.H{
-		"message": "Verification email sent. Please check your inbox.",
-		"email_sent": emailSent,
+		"message":               "Verification email sent. Please check your inbox.",
+		"email_sent":            emailSent,
 		"email_service_enabled": a.emailService != nil,
 	}
 
@@ -387,15 +387,15 @@ func (a *API) handleEmailVerify(c *gin.Context) {
 
 	// Update last login
 	if err := a.storage.UpdateLastLogin(c.Request.Context(), user.ID); err != nil {
-		// Log error but don't fail the request
+		log.Printf("failed to update last login: %v", err)
 	}
 
 	// Generate JWT token
 	claims := jwt.MapClaims{
-		"user_id":    user.ID.String(),
+		"user_id":     user.ID.String(),
 		"auth_method": "email",
-		"exp":        time.Now().Add(time.Hour * 24).Unix(),
-		"iat":        time.Now().Unix(),
+		"exp":         time.Now().Add(time.Hour * 24).Unix(),
+		"iat":         time.Now().Unix(),
 	}
 	if user.Email != nil {
 		claims["email"] = *user.Email
@@ -414,8 +414,8 @@ func (a *API) handleEmailVerify(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"token": tokenString,
 		"user": gin.H{
-			"id":            user.ID,
-			"email":         user.Email,
+			"id":             user.ID,
+			"email":          user.Email,
 			"email_verified": user.EmailVerified,
 		},
 	})
@@ -466,8 +466,8 @@ func (a *API) handleEmailResend(c *gin.Context) {
 	}
 
 	response := gin.H{
-		"message": "If the email exists, a verification link has been sent.",
-		"email_sent": emailSent,
+		"message":               "If the email exists, a verification link has been sent.",
+		"email_sent":            emailSent,
 		"email_service_enabled": a.emailService != nil,
 	}
 
@@ -674,10 +674,10 @@ func (a *API) handleEmailAdd(c *gin.Context) {
 	}
 
 	// If email is already linked to this user and verified, return success
-	if user.Email != nil && strings.ToLower(*user.Email) == strings.ToLower(req.Email) {
+	if user.Email != nil && strings.EqualFold(*user.Email, req.Email) {
 		if user.EmailVerified {
 			response := gin.H{
-				"message": "Email is already verified and linked to your account.",
+				"message":        "Email is already verified and linked to your account.",
 				"email_verified": true,
 			}
 			c.JSON(http.StatusOK, response)
@@ -700,7 +700,7 @@ func (a *API) handleEmailAdd(c *gin.Context) {
 	// For now, we'll update the user's email field but mark as unverified
 	// Then when they verify, we'll mark it as verified
 	// Actually, we need to store the token first, then verify will link it
-	
+
 	// Update email verification fields
 	if err := a.storage.UpdateEmailVerification(c.Request.Context(), userID, token, expires); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store verification token"})
@@ -708,7 +708,7 @@ func (a *API) handleEmailAdd(c *gin.Context) {
 	}
 
 	// Set email as unverified (or update if already exists)
-	if user.Email == nil || strings.ToLower(*user.Email) != strings.ToLower(req.Email) {
+	if user.Email == nil || !strings.EqualFold(*user.Email, req.Email) {
 		// Only set email if it's new or different
 		if err := a.storage.SetEmailUnverified(c.Request.Context(), userID, req.Email); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set email"})
@@ -728,13 +728,13 @@ func (a *API) handleEmailAdd(c *gin.Context) {
 
 	// Determine message based on whether email was already linked
 	message := "Verification email sent. Please check your inbox."
-	if user.Email != nil && strings.ToLower(*user.Email) == strings.ToLower(req.Email) && !user.EmailVerified {
+	if user.Email != nil && strings.EqualFold(*user.Email, req.Email) && !user.EmailVerified {
 		message = "Verification email resent. Please check your inbox to verify your email."
 	}
 
 	response := gin.H{
-		"message": message,
-		"email_sent": emailSent,
+		"message":               message,
+		"email_sent":            emailSent,
 		"email_service_enabled": a.emailService != nil,
 	}
 

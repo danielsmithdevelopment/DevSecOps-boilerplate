@@ -33,7 +33,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 
 	// Get database URL from environment variable
 	dbURL := os.Getenv("DATABASE_URL")
@@ -100,5 +100,5 @@ func main() {
 		zap.Time("timestamp", time.Now()))
 
 	// Keep the application running
-	select {} 
+	select {}
 }

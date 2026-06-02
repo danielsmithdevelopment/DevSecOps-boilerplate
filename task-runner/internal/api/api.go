@@ -111,7 +111,7 @@ task_runner_uptime_seconds %d
 	// Add task counts by instance and status
 	for instanceID, statusCounts := range instanceTaskCounts {
 		for status, count := range statusCounts {
-			metrics += fmt.Sprintf("task_runner_tasks_total{instance=\"%s\",status=\"%s\"} %d\n", 
+			metrics += fmt.Sprintf("task_runner_tasks_total{instance=\"%s\",status=\"%s\"} %d\n",
 				instanceID, status, count)
 		}
 	}
@@ -125,7 +125,7 @@ task_runner_uptime_seconds %d
 			total += d
 		}
 		avg := total / float64(len(durations))
-		metrics += fmt.Sprintf("task_runner_task_duration_seconds{instance=\"%s\"} %.2f\n", 
+		metrics += fmt.Sprintf("task_runner_task_duration_seconds{instance=\"%s\"} %.2f\n",
 			instanceID, avg)
 	}
 
@@ -186,9 +186,9 @@ func (a *API) handleAuth(c *gin.Context) {
 	// TODO: Implement actual authentication
 	// For now, just generate a token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id":  req.Username,
-		"exp":      time.Now().Add(time.Hour * 24).Unix(),
-		"iat":      time.Now().Unix(),
+		"user_id": req.Username,
+		"exp":     time.Now().Add(time.Hour * 24).Unix(),
+		"iat":     time.Now().Unix(),
 	})
 
 	tokenString, err := token.SignedString(a.jwtSecret)
@@ -347,4 +347,4 @@ func (a *API) handleListTasks(c *gin.Context) {
 // Run starts the API server
 func (a *API) Run(addr string) error {
 	return a.router.Run(addr)
-} 
+}

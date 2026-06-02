@@ -1,30 +1,23 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.25-alpine AS builder
+
+ENV GOTOOLCHAIN=auto
 
 WORKDIR /app
 
-# Copy go mod and sum files
 COPY go.mod go.sum ./
+RUN go mod download
 
-# Download dependencies and tidy
-RUN go mod download && go mod tidy
-
-# Copy source code
 COPY . .
-
-# Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -o task-runner ./cmd/server
 
-# Final stage
-FROM alpine:latest
+FROM alpine:3.21
 
+RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
 
-# Copy the binary from builder
 COPY --from=builder /app/task-runner .
 
-# Expose port
+USER app
 EXPOSE 8080
-
-# Run the application
-CMD ["./task-runner"] 
+CMD ["./task-runner"]

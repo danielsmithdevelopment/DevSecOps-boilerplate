@@ -24,7 +24,7 @@ type Storage interface {
 	UpdateLastLogin(ctx context.Context, userID uuid.UUID) error
 	InitSchema(ctx context.Context) error
 	Close() error
-	
+
 	// Email-related methods
 	GetOrCreateUserByEmail(ctx context.Context, email string) (*models.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
@@ -140,7 +140,7 @@ func generateNonce() (string, error) {
 func (s *PostgresStorage) GetOrCreateUser(ctx context.Context, walletAddress string) (*models.User, error) {
 	// Normalize address to lowercase
 	walletAddress = strings.ToLower(walletAddress)
-	
+
 	// Try to get existing user
 	user, err := s.GetUserByAddress(ctx, walletAddress)
 	if err == nil {
@@ -214,7 +214,7 @@ func (s *PostgresStorage) GetUserByAddress(ctx context.Context, walletAddress st
 		}
 		return nil, fmt.Errorf("failed to get user by address %s: %w", walletAddress, err)
 	}
-	log.Printf("DEBUG: GetUserByAddress found user: %s (stored address: %q)", user.ID, user.WalletAddress)
+	log.Printf("DEBUG: GetUserByAddress found user: %s (stored address: %v)", user.ID, user.WalletAddress)
 
 	return user, nil
 }

@@ -1,7 +1,9 @@
 terraform {
+  required_version = ">= 1.9.0"
+
   required_providers {
     linode = {
-      source = "linode/linode"
+      source  = "linode/linode"
       version = "2.5.2"
     }
   }
@@ -12,8 +14,8 @@ provider "linode" {
 }
 
 module "ubuntu22-instance" {
-    source = "../modules/linode-instance"
-    image_id = var.image_id
-    root_pass = var.root_pass
-    authorized_keys = var.authorized_keys
+  source          = "../modules/linode-instance"
+  image_id        = var.image_id
+  root_pass       = var.root_pass
+  authorized_keys = var.authorized_keys
 }

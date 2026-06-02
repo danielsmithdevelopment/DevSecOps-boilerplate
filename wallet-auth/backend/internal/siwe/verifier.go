@@ -12,9 +12,9 @@ import (
 
 // Verifier handles SIWE message generation and verification
 type Verifier struct {
-	domain   string
-	uri      string
-	chainID  int64
+	domain  string
+	uri     string
+	chainID int64
 }
 
 // NewVerifier creates a new SIWE verifier

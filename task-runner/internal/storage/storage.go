@@ -20,17 +20,17 @@ type Storage interface {
 	DeleteTask(ctx context.Context, id uuid.UUID) error
 	GetTask(ctx context.Context, id uuid.UUID) (*models.Task, error)
 	ListTasks(ctx context.Context) ([]*models.Task, error)
-	
+
 	// Task result operations
 	CreateTaskResult(ctx context.Context, result *models.TaskResult) error
 	GetTaskResult(ctx context.Context, id uuid.UUID) (*models.TaskResult, error)
 	ListTaskResults(ctx context.Context, taskID uuid.UUID) ([]*models.TaskResult, error)
-	
+
 	// Task locking operations
 	TryLockTask(ctx context.Context, taskID uuid.UUID, instanceID string) (bool, error)
 	ReleaseLock(ctx context.Context, taskID uuid.UUID, instanceID string) error
 	RefreshLock(ctx context.Context, taskID uuid.UUID, instanceID string) error
-	
+
 	// Cleanup
 	CleanupOldResults(ctx context.Context, olderThan time.Duration) error
 }
@@ -125,7 +125,7 @@ func (s *PostgresStorage) CreateTask(ctx context.Context, task *models.Task) err
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Convert task config to JSON
 	configJSON, err := json.Marshal(task.Config)
@@ -260,7 +260,7 @@ func (s *PostgresStorage) GetTaskResult(ctx context.Context, id uuid.UUID) (*mod
 func (s *PostgresStorage) ListTaskResults(ctx context.Context, taskID uuid.UUID) ([]*models.TaskResult, error) {
 	var query string
 	var args []interface{}
-	
+
 	if taskID == uuid.Nil {
 		query = `
 			SELECT id, task_id, status, output, error, start_time, end_time, version, metadata
@@ -385,7 +385,7 @@ func (s *PostgresStorage) UpdateTask(ctx context.Context, task *models.Task) err
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Serialize task config to JSON
 	configJSON, err := json.Marshal(task.Config)
@@ -453,7 +453,7 @@ func (s *PostgresStorage) DeleteTask(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Delete dependencies first
 	if _, err := tx.ExecContext(ctx, "DELETE FROM task_dependencies WHERE task_id = $1", id); err != nil {
@@ -560,7 +560,7 @@ func (s *PostgresStorage) TryLockTask(ctx context.Context, taskID uuid.UUID, ins
 	if err != nil {
 		return false, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Clean up expired locks first
 	_, err = tx.ExecContext(ctx, "DELETE FROM task_locks WHERE expires_at < NOW()")
@@ -633,4 +633,4 @@ func (s *PostgresStorage) RefreshLock(ctx context.Context, taskID uuid.UUID, ins
 	return nil
 }
 
-// Additional methods would be implemented here... 
+// Additional methods would be implemented here...

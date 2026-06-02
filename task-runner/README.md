@@ -15,6 +15,8 @@ A golang-based distributed task runner that clusters together with any number of
 - OpenTelemetry tracing
 - Loki log aggregation
 - Tempo trace storage
+- Health checks for all services
+- Automatic service recovery with restart policies
 
 ## Prerequisites
 
@@ -36,11 +38,17 @@ A golang-based distributed task runner that clusters together with any number of
    ```
 
 3. Access the services:
-   - Task Runner API: http://localhost:8080
+   - Task Runner API (5 instances):
+     - Instance 1: http://localhost:8080
+     - Instance 2: http://localhost:8081
+     - Instance 3: http://localhost:8082
+     - Instance 4: http://localhost:8083
+     - Instance 5: http://localhost:8084
    - Grafana: http://localhost:3000 (admin/admin)
    - Prometheus: http://localhost:9090
    - Loki: http://localhost:3100
    - Tempo: http://localhost:3200
+   - PostgreSQL: localhost:5432
 
 ## API Endpoints
 
@@ -76,6 +84,7 @@ A golang-based distributed task runner that clusters together with any number of
 - `DELETE /task/delete/:id` - Delete a task
 - `POST /task/invoke/:id` - Manually invoke a task
 - `GET /task/status/:id` - Get task status and results
+- `GET /health` - Health check endpoint
 
 ## Task Configuration
 
@@ -116,6 +125,7 @@ The task runner can be configured using environment variables:
 
 - `DB_CONN` - PostgreSQL connection string
 - `JWT_SECRET` - Secret key for JWT token generation
+- `INSTANCE_ID` - Unique identifier for each task runner instance
 - `ADDR` - Server address (default: :8080)
 
 ## Monitoring
@@ -140,9 +150,10 @@ Distributed tracing is provided by OpenTelemetry and can be viewed in Grafana wi
 ## Security
 
 - JWT-based authentication for API endpoints
-- Mutual TLS authentication between nodes
-- Encrypted secrets for tasks
 - PostgreSQL for secure data storage
+- Environment variable based configuration
+- Health checks for all services
+- Automatic service recovery
 
 ## License
 

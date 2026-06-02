@@ -3,7 +3,8 @@ services:
   app:
     build: .
     ports: [4200:4200]
-    labels: { logging: "promtail" }
+    labels:
+      logging: promtail
 
   loki:
     image: grafana/loki:3.3.2
@@ -26,7 +27,7 @@ services:
       - ./configs/grafana.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.2.1
     ports: [9090:9090]
     volumes:
       - ./configs/prometheus.yaml:/etc/prometheus/prometheus.yml
