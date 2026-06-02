@@ -1,15 +1,15 @@
 variable "linode_api_token" {
-    default = ""
+  default = ""
 }
 
 variable "image_id" {
-    default = ""
+  default = ""
 }
 
 variable "root_pass" {
-    default = ""
+  default = ""
 }
 
 variable "authorized_keys" {
-    default = ""
+  default = ""
 }

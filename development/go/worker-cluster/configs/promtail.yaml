@@ -16,5 +16,8 @@ scrape_configs:
         regex: "/(.*)"
         target_label: "container"
     pipeline_stages:
-      - json: { expressions: { level: level } }
-      - labels: { level }
+      - json:
+          expressions:
+            level: level
+      - labels:
+          level:

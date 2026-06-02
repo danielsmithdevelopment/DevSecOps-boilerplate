@@ -3,7 +3,8 @@ services:
   app:
     build: .
     ports: [8080:8080]
-    labels: { logging: "promtail" }
+    labels:
+      logging: promtail
 
   loki:
     image: grafana/loki:3.3.2

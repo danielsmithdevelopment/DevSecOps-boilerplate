@@ -150,7 +150,7 @@ services:
 
   tempo:
     image: grafana/tempo:latest
-    command: [ "-config.file=/etc/tempo.yaml" ]
+    command: ["-config.file=/etc/tempo.yaml"]
     volumes:
       - tempo-data:/tmp/tempo
     ports:
@@ -165,4 +165,4 @@ volumes:
 
 networks:
   task-runner-network:
-    driver: bridge 
+    driver: bridge
