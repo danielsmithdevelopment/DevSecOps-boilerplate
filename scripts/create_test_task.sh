@@ -2,7 +2,7 @@
 
 # Configuration
 API_URL="http://localhost:8080"
-JWT_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidGVzdCIsImV4cCI6MTc0NDUyNTEwNCwiaWF0IjoxNzQ0NDM4NzA0fQ.8Q9Pq7-ljdkvbjfGH5ZFhH72u_M4s8gBPqGxxUYfiq8"
+JWT_TOKEN="${JWT_TOKEN:?Set JWT_TOKEN before running this script}"
 
 # Task configuration
 TASK_NAME="test-http-task"

@@ -219,14 +219,14 @@ func (s *Scheduler) RemoveTask(ctx context.Context, taskID uuid.UUID) error {
 // ExecuteTaskNow executes a task immediately without scheduling
 func (s *Scheduler) ExecuteTaskNow(ctx context.Context, task *models.Task) error {
 	fmt.Printf("[Instance %s] Starting immediate execution of task %s\n", s.instanceID, task.ID)
-	
+
 	// Create a copy of the task to avoid race conditions
 	taskCopy := *task
-	
+
 	// Create a new context with timeout
 	execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	
+
 	// Execute task directly and wait for result
 	fmt.Printf("[Instance %s] Executing task %s with worker\n", s.instanceID, task.ID)
 	result, err := s.worker.ExecuteTask(execCtx, &taskCopy)
@@ -276,4 +276,4 @@ func (s *Scheduler) ExecuteTaskNow(ctx context.Context, task *models.Task) error
 	fmt.Printf("[Instance %s] Task %s status updated successfully\n", s.instanceID, task.ID)
 
 	return nil
-} 
+}

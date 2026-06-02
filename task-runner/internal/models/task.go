@@ -25,17 +25,17 @@ const (
 
 // Task represents a task to be executed
 type Task struct {
-	ID          uuid.UUID  `json:"id"`
-	Name        string     `json:"name"`
-	Type        TaskType   `json:"type"`
-	Schedule    string     `json:"schedule"` // cron expression
-	Status      TaskStatus `json:"status"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	CreatedBy   string     `json:"created_by"`
-	Version     int        `json:"version"`
+	ID           uuid.UUID   `json:"id"`
+	Name         string      `json:"name"`
+	Type         TaskType    `json:"type"`
+	Schedule     string      `json:"schedule"` // cron expression
+	Status       TaskStatus  `json:"status"`
+	CreatedAt    time.Time   `json:"created_at"`
+	UpdatedAt    time.Time   `json:"updated_at"`
+	CreatedBy    string      `json:"created_by"`
+	Version      int         `json:"version"`
 	Dependencies []uuid.UUID `json:"dependencies,omitempty"`
-	Config      TaskConfig  `json:"config"`
+	Config       TaskConfig  `json:"config"`
 }
 
 // TaskConfig contains the configuration for different task types
@@ -53,15 +53,15 @@ type HTTPTaskConfig struct {
 
 // TaskResult represents the result of a task execution
 type TaskResult struct {
-	ID        uuid.UUID          `json:"id"`
-	TaskID    uuid.UUID          `json:"task_id"`
-	Status    TaskStatus         `json:"status"`
-	Output    string             `json:"output"`
-	Error     string             `json:"error,omitempty"`
-	StartTime time.Time          `json:"start_time"`
-	EndTime   time.Time          `json:"end_time"`
-	Version   int                `json:"version"`
-	Metadata  map[string]string  `json:"metadata,omitempty"`
+	ID        uuid.UUID         `json:"id"`
+	TaskID    uuid.UUID         `json:"task_id"`
+	Status    TaskStatus        `json:"status"`
+	Output    string            `json:"output"`
+	Error     string            `json:"error,omitempty"`
+	StartTime time.Time         `json:"start_time"`
+	EndTime   time.Time         `json:"end_time"`
+	Version   int               `json:"version"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
 }
 
 // NewTask creates a new task with default values
@@ -77,4 +77,4 @@ func NewTask(name string, taskType TaskType, schedule string, createdBy string) 
 		CreatedBy: createdBy,
 		Version:   1,
 	}
-} 
+}

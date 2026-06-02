@@ -15,7 +15,7 @@ func main() {
 		policy, err := json.Marshal(map[string]interface{}{
 			"Version": "2012-10-17",
 			"Statement": []map[string]interface{}{
-				map[string]interface{}{
+				{
 					"Action": "sts:AssumeRole",
 					"Effect": "Allow",
 					"Principal": map[string]interface{}{
@@ -54,8 +54,8 @@ func main() {
 		method := apigateway.MethodGET
 		api, err := apigateway.NewRestAPI(ctx, "api", &apigateway.RestAPIArgs{
 			Routes: []apigateway.RouteArgs{
-				apigateway.RouteArgs{Path: "/", LocalPath: &localPath},
-				apigateway.RouteArgs{Path: "/date", Method: &method, EventHandler: fn},
+				{Path: "/", LocalPath: &localPath},
+				{Path: "/date", Method: &method, EventHandler: fn},
 			},
 		})
 		if err != nil {

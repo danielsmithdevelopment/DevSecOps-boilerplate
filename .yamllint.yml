@@ -1,0 +1,15 @@
+---
+extends: default
+
+ignore: |
+  .git/
+
+rules:
+  line-length:
+    max: 160
+    allow-non-breakable-inline-mappings: true
+  document-start: disable
+  truthy:
+    allowed-values: ["true", "false", "yes", "no"]
+  comments:
+    min-spaces-from-content: 1

@@ -1,0 +1,246 @@
+# CI gate for main: configure branch protection to require "CI / ci-gate".
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  go:
+    name: Go lint, format, and test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - task-runner
+          - pulumi/aws/prod
+          - docker/grafana-stack
+          - development/go/worker-cluster
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: Verify gofmt
+        working-directory: ${{ matrix.module }}
+        run: |
+          unformatted="$(gofmt -l -s .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.62.2
+          working-directory: ${{ matrix.module }}
+
+      - name: go test
+        working-directory: ${{ matrix.module }}
+        run: go test ./...
+
+  python:
+    name: Python lint and format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/ruff-action@v3
+        with:
+          src: pulumi/aws/prod/function
+
+      - uses: astral-sh/ruff-action@v3
+        with:
+          src: pulumi/aws/prod/function
+          args: format --check
+
+  terraform:
+    name: Terraform format and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Verify terraform fmt
+        run: terraform fmt -check -recursive terraform/
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.54.0
+
+      - name: tflint
+        run: |
+          set -euo pipefail
+          for dir in \
+            terraform/linode/dev \
+            terraform/linode/modules/linode-instance \
+            terraform/linode/modules/cloud-firewall
+          do
+            echo "Linting ${dir}"
+            (
+              cd "${dir}"
+              terraform init -backend=false -input=false
+              tflint --init
+              tflint
+            )
+          done
+
+  ansible:
+    name: Ansible lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ansible/ansible-lint@v24
+        with:
+          args: ansible/
+
+  yaml:
+    name: YAML lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: yamllint
+        run: |
+          pip install yamllint==0.35.1
+          yamllint -c .yamllint.yml .
+
+  packer:
+    name: Packer format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-packer@main
+
+      - name: Verify packer fmt
+        run: packer fmt -check -recursive packer/
+
+  shell:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck scripts/*.sh packer/docker/ubuntu-base/install-ansible.sh
+
+  osv-scanner:
+    name: OSV dependency scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google/osv-scanner-action@v1
+        with:
+          scan-args: |-
+            --recursive
+            .
+
+  trivy-fs:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan repository
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: "1"
+          ignore-unfixed: true
+
+  trivy-docker:
+    name: Trivy container scan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - context: task-runner
+            file: task-runner/Dockerfile
+          - context: development/go/worker-cluster
+            file: development/go/worker-cluster/Dockerfile
+          - context: docker/grafana-stack
+            file: docker/grafana-stack/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t scan-target -f "${{ matrix.file }}" "${{ matrix.context }}"
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: scan-target
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: "1"
+          ignore-unfixed: true
+
+  ci-gate:
+    name: ci-gate
+    runs-on: ubuntu-latest
+    needs:
+      - go
+      - python
+      - terraform
+      - ansible
+      - yaml
+      - packer
+      - shell
+      - osv-scanner
+      - trivy-fs
+      - trivy-docker
+    if: always()
+    steps:
+      - name: Require all checks to pass
+        run: |
+          check() {
+            local name="$1"
+            local result="$2"
+            if [ "$result" != "success" ]; then
+              echo "Job '${name}' result: ${result}"
+              exit 1
+            fi
+          }
+          check go "${{ needs.go.result }}"
+          check python "${{ needs.python.result }}"
+          check terraform "${{ needs.terraform.result }}"
+          check ansible "${{ needs.ansible.result }}"
+          check yaml "${{ needs.yaml.result }}"
+          check packer "${{ needs.packer.result }}"
+          check shell "${{ needs.shell.result }}"
+          check osv-scanner "${{ needs.osv-scanner.result }}"
+          check trivy-fs "${{ needs.trivy-fs.result }}"
+          check trivy-docker "${{ needs.trivy-docker.result }}"
+          echo "All CI checks passed."
