@@ -1,6 +1,6 @@
 module worker-cluster
 
-go 1.25.10
+go 1.25.11
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.13
