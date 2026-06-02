@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/yourusername/task-runner/internal/api"
+	"github.com/yourusername/task-runner/internal/otelsetup"
 	"github.com/yourusername/task-runner/internal/scheduler"
 	"github.com/yourusername/task-runner/internal/storage"
 	"github.com/yourusername/task-runner/internal/worker"
@@ -31,6 +32,12 @@ func main() {
 	// Create context that can be cancelled
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	shutdownTracer, err := otelsetup.InitTracer(ctx, "task-runner")
+	if err != nil {
+		log.Fatalf("Failed to initialize tracing: %v", err)
+	}
+	defer func() { _ = shutdownTracer(ctx) }()
 
 	// Initialize storage
 	store, err := storage.NewPostgresStorage(*dbConnStr)

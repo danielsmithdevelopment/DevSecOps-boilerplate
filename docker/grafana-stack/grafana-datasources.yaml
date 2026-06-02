@@ -29,7 +29,7 @@ datasources:
     uid: tempo
     type: tempo
     access: proxy
-    url: http://tempo:3200
+    url: http://tempo:8265
     jsonData:
       tracesToLogsV2:
         datasourceUid: loki

@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"worker-cluster/internal/otelsetup"
 )
 
 var taskTotal = atomic.Int32{}
@@ -32,9 +33,16 @@ func initialize() {
 func main() {
 	initialize()
 	ctx := log.Logger.WithContext(context.Background())
+	shutdownTracer, err := otelsetup.InitTracer(ctx, "worker-cluster")
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to initialize tracing")
+	}
+	defer func() { _ = shutdownTracer(ctx) }()
+
 	log.Ctx(ctx).Info().Msg("Starting work")
 
 	app := fiber.New()
+	app.Use(otelsetup.FiberMiddleware("worker-cluster"))
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		startTime := time.Now()
