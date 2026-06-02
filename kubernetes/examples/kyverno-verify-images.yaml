@@ -1,0 +1,29 @@
+# Example Kyverno ClusterPolicy: require Cosign signatures on GHCR images
+# Requires Kyverno installed in the cluster.
+# Adjust imagePatterns and certificate identity for your org/forks.
+#
+# Apply: kubectl apply -f kubernetes/examples/kyverno-verify-images.yaml
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-signed-ghcr-images
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: verify-cosign-signature
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/danielsmithdevelopment/devsecops-boilerplate/*"
+          attestors:
+            - entries:
+                - keyless:
+                    subject: "https://github.com/danielsmithdevelopment/DevSecOps-boilerplate/.github/workflows/docker-publish.yml@refs/heads/main"
+                    issuer: "https://token.actions.githubusercontent.com"
+                    rekor:
+                      url: https://rekor.sigstore.dev

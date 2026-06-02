@@ -1,0 +1,7 @@
+# Default owners for review. Adjust team handles for your org.
+* @danielsmithdevelopment
+
+/.github/ @danielsmithdevelopment
+/docs/security/ @danielsmithdevelopment
+/.gitleaks.toml @danielsmithdevelopment
+/osv-scanner.toml @danielsmithdevelopment

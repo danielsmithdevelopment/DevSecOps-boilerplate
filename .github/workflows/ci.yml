@@ -17,8 +17,23 @@ permissions:
   security-events: write
 
 jobs:
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
   quick:
     name: Quick lint
+    needs: secret-scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,6 +63,41 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y shellcheck
           shellcheck scripts/*.sh packer/docker/ubuntu-base/install-ansible.sh
+
+      - name: Reject floating container tags
+        run: |
+          set -euo pipefail
+          matches="$(rg 'image:\s*[^\s]+:latest\b' \
+            --glob 'docker-compose*.yml' \
+            --glob 'docker-compose*.yaml' \
+            --glob 'compose*.yml' \
+            --glob 'compose*.yaml' \
+            . || true)"
+          if [ -n "$matches" ]; then
+            echo "Pinned images required — found :latest references:"
+            echo "$matches"
+            exit 1
+          fi
+
+  frontend:
+    name: Frontend audit
+    needs: secret-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: wallet-auth/frontend/package-lock.json
+
+      - name: npm ci and audit
+        working-directory: wallet-auth/frontend
+        run: |
+          npm ci
+          npm audit --omit=dev --audit-level=high
+          npm run build
 
   terraform:
     name: Terraform format and lint
@@ -143,9 +193,9 @@ jobs:
         working-directory: ${{ matrix.module }}
         run: go test ./...
 
-  osv-scanner:
-    name: OSV dependency scan
-    needs: [go, terraform, ansible]
+  supply-chain:
+    name: Supply chain scan
+    needs: [go, terraform, ansible, frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -154,14 +204,28 @@ jobs:
         with:
           go-version: "1.25.11"
 
-      - name: Run OSV-Scanner
+      - name: OSV-Scanner
         run: |
           go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.3.8
-          osv-scanner scan --recursive .
+          osv-scanner scan --recursive --config=osv-scanner.toml .
+
+      - name: Generate repository SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom-repository.cdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-repository-cyclonedx
+          path: sbom-repository.cdx.json
+          retention-days: 90
 
   trivy-fs:
     name: Trivy filesystem scan
-    needs: [go, terraform, ansible]
+    needs: [go, terraform, ansible, frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -175,6 +239,7 @@ jobs:
           severity: CRITICAL,HIGH,MEDIUM
           exit-code: "1"
           ignore-unfixed: true
+          trivyignores: .trivyignore
 
   trivy-docker:
     name: Trivy container scan
@@ -209,16 +274,19 @@ jobs:
           severity: CRITICAL,HIGH,MEDIUM
           exit-code: "1"
           ignore-unfixed: true
+          trivyignores: .trivyignore
 
   ci-gate:
     name: ci-gate
     runs-on: ubuntu-latest
     needs:
+      - secret-scan
       - quick
+      - frontend
       - terraform
       - ansible
       - go
-      - osv-scanner
+      - supply-chain
       - trivy-fs
       - trivy-docker
     if: always()
@@ -237,11 +305,13 @@ jobs:
               exit 1
             fi
           }
+          check secret-scan "${{ needs.secret-scan.result }}"
           check quick "${{ needs.quick.result }}"
+          check frontend "${{ needs.frontend.result }}"
           check terraform "${{ needs.terraform.result }}"
           check ansible "${{ needs.ansible.result }}"
           check go "${{ needs.go.result }}"
-          check osv-scanner "${{ needs.osv-scanner.result }}"
+          check supply-chain "${{ needs.supply-chain.result }}"
           check trivy-fs "${{ needs.trivy-fs.result }}"
           check trivy-docker "${{ needs.trivy-docker.result }}"
           echo "All CI checks passed."
