@@ -1,125 +1,84 @@
+x-task-runner-common: &task-runner-common
+  build: .
+  env_file:
+    - .env
+  networks:
+    - task-runner-network
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    start_period: 10s
+
 services:
   task-runner-1:
-    build: .
+    <<: *task-runner-common
     ports:
       - "8080:8080"
     environment:
-      - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
-      - JWT_SECRET=your-secret-key-here
-      - INSTANCE_ID=task-runner-1
-      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-      - OTEL_SERVICE_NAME=task-runner
-    depends_on:
-      - postgres
-    networks:
-      - task-runner-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      INSTANCE_ID: task-runner-1
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      OTEL_SERVICE_NAME: task-runner
 
   task-runner-2:
-    build: .
+    <<: *task-runner-common
     ports:
       - "8081:8080"
     environment:
-      - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
-      - JWT_SECRET=your-secret-key-here
-      - INSTANCE_ID=task-runner-2
-      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-      - OTEL_SERVICE_NAME=task-runner
-    depends_on:
-      - postgres
-    networks:
-      - task-runner-network
-    restart: unless-stopped
+      INSTANCE_ID: task-runner-2
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      OTEL_SERVICE_NAME: task-runner
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
   task-runner-3:
-    build: .
+    <<: *task-runner-common
     ports:
       - "8082:8080"
     environment:
-      - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
-      - JWT_SECRET=your-secret-key-here
-      - INSTANCE_ID=task-runner-3
-      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-      - OTEL_SERVICE_NAME=task-runner
-    depends_on:
-      - postgres
-    networks:
-      - task-runner-network
-    restart: unless-stopped
+      INSTANCE_ID: task-runner-3
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      OTEL_SERVICE_NAME: task-runner
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
   task-runner-4:
-    build: .
+    <<: *task-runner-common
     ports:
       - "8083:8080"
     environment:
-      - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
-      - JWT_SECRET=your-secret-key-here
-      - INSTANCE_ID=task-runner-4
-      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-      - OTEL_SERVICE_NAME=task-runner
-    depends_on:
-      - postgres
-    networks:
-      - task-runner-network
-    restart: unless-stopped
+      INSTANCE_ID: task-runner-4
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      OTEL_SERVICE_NAME: task-runner
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8083/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
   task-runner-5:
-    build: .
+    <<: *task-runner-common
     ports:
       - "8084:8080"
     environment:
-      - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
-      - JWT_SECRET=your-secret-key-here
-      - INSTANCE_ID=task-runner-5
-      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-      - OTEL_SERVICE_NAME=task-runner
-    depends_on:
-      - postgres
-    networks:
-      - task-runner-network
-    restart: unless-stopped
+      INSTANCE_ID: task-runner-5
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      OTEL_SERVICE_NAME: task-runner
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8084/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
   postgres:
     image: postgres:15-alpine
+    env_file:
+      - .env
     environment:
-      - POSTGRES_USER=taskrunner
-      - POSTGRES_PASSWORD=taskrunner
-      - POSTGRES_DB=taskrunner
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
@@ -134,7 +93,7 @@ services:
       retries: 5
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.2.1
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
@@ -146,8 +105,10 @@ services:
 
   grafana:
     image: grafana/grafana:11.4.0
+    env_file:
+      - .env
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
     ports:
       - "3000:3000"
     volumes:

@@ -1,0 +1,3 @@
+# OSV-Scanner configuration: https://google.github.io/osv-scanner/configuration/
+# Add [[IgnoredVulns]] entries with id, reason, and optional expires fields.
+# See docs/security/VULN_SLA.md for waiver process.

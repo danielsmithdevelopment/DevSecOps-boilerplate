@@ -1,0 +1,23 @@
+title = "DevSecOps boilerplate gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented dev placeholders and examples"
+paths = [
+  '''(?i)(^|/)\.env\.example$''',
+  '''(?i)(^|/)env\.example$''',
+  '''(?i)docs/security/''',
+  '''(?i)\.pre-commit-config\.yaml$''',
+]
+regexTarget = "match"
+regexes = [
+  '''your-secret-key-here''',
+  '''your-secret-key-change-in-production''',
+  '''your-aws-access-key-id''',
+  '''your-aws-secret-access-key''',
+  '''your-walletconnect-project-id''',
+  '''GF_SECURITY_ADMIN_PASSWORD=admin''',
+  '''JWT_SECRET=your-secret-key''',
+]

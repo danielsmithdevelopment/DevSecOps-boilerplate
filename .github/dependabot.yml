@@ -1,0 +1,46 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /task-runner
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: gomod
+    directory: /docker/grafana-stack
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: gomod
+    directory: /development/go/worker-cluster
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: gomod
+    directory: /pulumi/aws/prod
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: gomod
+    directory: /wallet-auth/backend
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /wallet-auth/frontend
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: pip
+    directory: /pulumi/aws/prod/function
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: terraform
+    directory: /terraform/linode/dev
+    schedule:
+      interval: weekly

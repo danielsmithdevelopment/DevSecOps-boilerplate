@@ -1,0 +1,2 @@
+# Trivy ignore list — each entry needs rationale in docs/security/VULN_SLA.md
+# Format: CVE-ID or vulnerability ID
