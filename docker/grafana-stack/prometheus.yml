@@ -2,15 +2,26 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+remote_write:
+  - url: http://mimir:9009/api/v1/push
+
 scrape_configs:
-  - job_name: 'prometheus'
+  - job_name: prometheus
     static_configs:
-      - targets: ['localhost:9090']
+      - targets: [localhost:9090]
 
-  - job_name: 'app'
+  - job_name: app
     static_configs:
-      - targets: ['app:8080']
+      - targets: [app:8080]
 
-  - job_name: 'tempo'
+  - job_name: mimir
     static_configs:
-      - targets: ['tempo:8265']
+      - targets: [mimir:9009]
+
+  - job_name: tempo
+    static_configs:
+      - targets: [tempo:8265]
+
+  - job_name: otel-collector
+    static_configs:
+      - targets: [otel-collector:8888]

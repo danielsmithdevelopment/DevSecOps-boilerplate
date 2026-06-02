@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -8,9 +9,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/danielsmithdevelopment/DevSecOps-boilerplate/internal/otelsetup"
 	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.uber.org/zap"
 )
 
@@ -28,6 +31,13 @@ func init() {
 }
 
 func main() {
+	ctx := context.Background()
+	shutdownTracer, err := otelsetup.InitTracer(ctx, "grafana-stack-app")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() { _ = shutdownTracer(ctx) }()
+
 	// Initialize logger
 	logger, err := zap.NewProduction()
 	if err != nil {
@@ -66,7 +76,8 @@ func main() {
 
 	// Start metrics server
 	go func() {
-		http.Handle("/metrics", promhttp.Handler())
+		metricsHandler := otelhttp.NewHandler(promhttp.Handler(), "metrics")
+		http.Handle("/metrics", metricsHandler)
 		if err := http.ListenAndServe(":8080", nil); err != nil {
 			logger.Error("Metrics server failed",
 				zap.Error(err))

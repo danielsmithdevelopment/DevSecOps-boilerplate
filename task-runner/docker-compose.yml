@@ -7,6 +7,9 @@ services:
       - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
       - JWT_SECRET=your-secret-key-here
       - INSTANCE_ID=task-runner-1
+      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+      - OTEL_SERVICE_NAME=task-runner
     depends_on:
       - postgres
     networks:
@@ -27,6 +30,9 @@ services:
       - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
       - JWT_SECRET=your-secret-key-here
       - INSTANCE_ID=task-runner-2
+      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+      - OTEL_SERVICE_NAME=task-runner
     depends_on:
       - postgres
     networks:
@@ -47,6 +53,9 @@ services:
       - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
       - JWT_SECRET=your-secret-key-here
       - INSTANCE_ID=task-runner-3
+      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+      - OTEL_SERVICE_NAME=task-runner
     depends_on:
       - postgres
     networks:
@@ -67,6 +76,9 @@ services:
       - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
       - JWT_SECRET=your-secret-key-here
       - INSTANCE_ID=task-runner-4
+      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+      - OTEL_SERVICE_NAME=task-runner
     depends_on:
       - postgres
     networks:
@@ -87,6 +99,9 @@ services:
       - DB_CONN=postgres://taskrunner:taskrunner@postgres:5432/taskrunner?sslmode=disable
       - JWT_SECRET=your-secret-key-here
       - INSTANCE_ID=task-runner-5
+      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+      - OTEL_SERVICE_NAME=task-runner
     depends_on:
       - postgres
     networks:
@@ -124,24 +139,30 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
+    depends_on:
+      - mimir
     networks:
       - task-runner-network
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.4.0
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     ports:
       - "3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./configs/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
     depends_on:
       - prometheus
+      - mimir
+      - loki
+      - tempo
     networks:
       - task-runner-network
 
   loki:
-    image: grafana/loki:latest
+    image: grafana/loki:3.3.2
     ports:
       - "3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
@@ -149,12 +170,51 @@ services:
       - task-runner-network
 
   tempo:
-    image: grafana/tempo:latest
-    command: ["-config.file=/etc/tempo.yaml"]
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
     volumes:
+      - ./configs/tempo.yaml:/etc/tempo/tempo.yaml
       - tempo-data:/tmp/tempo
     ports:
       - "3200:3200"
+    networks:
+      - task-runner-network
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    volumes:
+      - ./configs/promtail-config.yaml:/etc/promtail/config.yaml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yaml
+    depends_on:
+      - loki
+    networks:
+      - task-runner-network
+
+  mimir:
+    image: grafana/mimir:2.14.3
+    command: ["-config.file=/etc/mimir/mimir.yaml"]
+    volumes:
+      - ./configs/mimir.yaml:/etc/mimir/mimir.yaml
+      - mimir-data:/data/mimir
+    ports:
+      - "9009:9009"
+    networks:
+      - task-runner-network
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    command: ["--config=/etc/otel-collector.yaml"]
+    volumes:
+      - ./configs/otel-collector.yaml:/etc/otel-collector.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      - loki
+      - tempo
+      - mimir
     networks:
       - task-runner-network
 
@@ -162,6 +222,7 @@ volumes:
   postgres-data:
   grafana-data:
   tempo-data:
+  mimir-data:
 
 networks:
   task-runner-network:

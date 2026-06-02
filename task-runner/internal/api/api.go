@@ -12,6 +12,7 @@ import (
 	"github.com/yourusername/task-runner/internal/models"
 	"github.com/yourusername/task-runner/internal/scheduler"
 	"github.com/yourusername/task-runner/internal/storage"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 // API handles HTTP endpoints
@@ -28,10 +29,11 @@ func NewAPI(storage storage.Storage, scheduler *scheduler.Scheduler, jwtSecret [
 	api := &API{
 		storage:   storage,
 		scheduler: scheduler,
-		router:    gin.Default(),
+		router:    gin.New(),
 		jwtSecret: jwtSecret,
 		startTime: time.Now(),
 	}
+	api.router.Use(gin.Recovery(), gin.Logger(), otelgin.Middleware("task-runner"))
 
 	api.setupRoutes()
 	return api
