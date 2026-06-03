@@ -84,11 +84,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # GHCR requires lowercase paths; github.repository preserves repo name casing.
+      - name: Set image repository
+        id: image
+        run: echo "repository=${{ env.REGISTRY }}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.image }}
+          images: ${{ steps.image.outputs.repository }}/${{ matrix.image }}
           tags: |
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
@@ -108,7 +113,7 @@ jobs:
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@0.35.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}
+          image-ref: ${{ steps.image.outputs.repository }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}
           severity: CRITICAL,HIGH
           exit-code: "1"
           ignore-unfixed: true
@@ -123,7 +128,7 @@ jobs:
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          cosign sign --yes "${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.image }}@${DIGEST}"
+          cosign sign --yes "${{ steps.image.outputs.repository }}/${{ matrix.image }}@${DIGEST}"
 
       - name: Verify signature
         env:
@@ -132,4 +137,4 @@ jobs:
           cosign verify \
             --certificate-identity-regexp "https://github.com/${{ github.repository }}/.+" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-            "${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.image }}@${DIGEST}"
+            "${{ steps.image.outputs.repository }}/${{ matrix.image }}@${DIGEST}"
