@@ -1,0 +1,46 @@
+target: all
+multitenancy_enabled: false
+
+server:
+  http_listen_port: 9009
+  log_level: warn
+
+blocks_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/mimir/blocks
+
+compactor:
+  data_dir: /data/mimir/compactor
+  sharding_ring:
+    kvstore:
+      store: memberlist
+
+distributor:
+  ring:
+    instance_addr: mimir
+    kvstore:
+      store: memberlist
+
+ingester:
+  ring:
+    instance_addr: mimir
+    kvstore:
+      store: memberlist
+    replication_factor: 1
+
+ruler:
+  alertmanager_url: http://alertmanager:9093
+
+ruler_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/mimir/rules
+
+alertmanager_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/mimir/alertmanager
+
+limits:
+  max_global_series_per_user: 150000

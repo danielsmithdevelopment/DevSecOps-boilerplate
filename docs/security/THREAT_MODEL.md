@@ -45,4 +45,7 @@ flowchart LR
 
 - [ ] Rate limiting on public API routes
 - [ ] mTLS between services in Kubernetes
-- [ ] Falco rules for anomalous process/network in cluster
+- [x] Falco rules for anomalous process/network (`docker/observability/docker-compose.security.yaml`)
+- [x] Falco Talon response engine wired via Falcosidekick
+- [ ] Tetragon policies tuned for production workloads
+- [ ] Wazuh agents deployed on all nodes

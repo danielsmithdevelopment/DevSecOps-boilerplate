@@ -1,4 +1,10 @@
-version: '3.8'
+# Sample app + shared observability stack.
+#   cp .env.example .env
+#   docker compose up -d
+
+include:
+  - path: ../observability/docker-compose.yaml
+    env_file: .env
 
 services:
   postgres:
@@ -9,16 +15,12 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://loki:3100/loki/api/v1/push"
-        loki-retries: "5"
-        loki-batch-size: "400"
+    networks:
+      - observability
 
   app:
     build:
-      context: ../
+      context: .
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
@@ -32,113 +34,15 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
       OTEL_EXPORTER_OTLP_INSECURE: "true"
       OTEL_SERVICE_NAME: grafana-stack-app
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+    networks:
+      - observability
     labels:
       - "logging=true"
 
   prometheus:
-    image: prom/prometheus:v3.2.1
-    ports:
-      - "9090:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    depends_on:
-      - mimir
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://loki:3100/loki/api/v1/push"
-        loki-retries: "5"
-        loki-batch-size: "400"
-
-  grafana:
-    image: grafana/grafana:11.4.0
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
-    depends_on:
-      - prometheus
-      - mimir
-      - loki
-      - tempo
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://loki:3100/loki/api/v1/push"
-        loki-retries: "5"
-        loki-batch-size: "400"
-
-  loki:
-    image: grafana/loki:3.3.2
-    ports:
-      - "3100:3100"
-    volumes:
-      - ./loki-config.yaml:/etc/loki/local-config.yaml
-    command: -config.file=/etc/loki/local-config.yaml
-
-  tempo:
-    image: grafana/tempo:2.6.1
-    command: ["-config.file=/etc/tempo/tempo.yaml"]
-    volumes:
-      - ./tempo.yaml:/etc/tempo/tempo.yaml
-      - tempo_data:/tmp/tempo
-    user: "0"
-    ports:
-      - "8265:8265"
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://loki:3100/loki/api/v1/push"
-        loki-retries: "5"
-        loki-batch-size: "400"
-
-  promtail:
-    image: grafana/promtail:3.3.2
-    volumes:
-      - ./promtail-config.yaml:/etc/promtail/config.yaml
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: -config.file=/etc/promtail/config.yaml
-    depends_on:
-      - loki
-
-  mimir:
-    image: grafana/mimir:2.14.3
-    command: ["-config.file=/etc/mimir/mimir.yaml"]
-    volumes:
-      - ./mimir.yaml:/etc/mimir/mimir.yaml
-      - mimir_data:/data/mimir
-    ports:
-      - "9009:9009"
-
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.116.1
-    command: ["--config=/etc/otel-collector.yaml"]
-    volumes:
-      - ./otel-collector.yaml:/etc/otel-collector.yaml
-    ports:
-      - "4317:4317"
-      - "4318:4318"
-    depends_on:
-      - loki
-      - tempo
-      - mimir
+      - ./prometheus-app.yml:/etc/prometheus/prometheus.yml:ro
+      - ../observability/configs/mimir/rules:/etc/prometheus/rules:ro
 
 volumes:
   postgres_data:
-  grafana_data:
-  loki_data:
-  tempo_data:
-  mimir_data:
-x-logging: &default-logging
-  driver: loki
-  options:
-    loki-url: "http://host.docker.internal:3100/loki/api/v1/push"
-    loki-retries: "5"
-    loki-batch-size: "400"

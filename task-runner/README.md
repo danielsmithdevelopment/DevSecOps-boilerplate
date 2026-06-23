@@ -32,9 +32,10 @@ A golang-based distributed task runner that clusters together with any number of
    cd task-runner
    ```
 
-2. Start the services:
+2. Configure secrets and start the stack:
    ```bash
-   docker-compose up -d
+   cp .env.example .env
+   docker compose up -d
    ```
 
 3. Access the services:
@@ -44,11 +45,19 @@ A golang-based distributed task runner that clusters together with any number of
      - Instance 3: http://localhost:8082
      - Instance 4: http://localhost:8083
      - Instance 5: http://localhost:8084
-   - Grafana: http://localhost:3000 (admin/admin)
+   - Grafana: http://localhost:3000 (see `GF_SECURITY_ADMIN_PASSWORD` in `.env`)
+   - OnCall: http://localhost:8090
    - Prometheus: http://localhost:9090
-   - Loki: http://localhost:3100
-   - Tempo: http://localhost:3200
+   - Alertmanager: http://localhost:9093
+   - Faro collector (Alloy): http://localhost:8027
+   - Pyroscope: http://localhost:4040
    - PostgreSQL: localhost:5432
+
+   Observability configs live in `docker/observability/`. Optional runtime security overlay:
+
+   ```bash
+   docker compose -f ../docker/observability/docker-compose.security.yaml up -d
+   ```
 
 ## API Endpoints
 

@@ -1,0 +1,8 @@
+- rule: Unexpected outbound connection
+  desc: Detect outbound connections to non-private IPs
+  condition: >
+    outbound and not fd.sport in (53, 443, 80, 4317, 4318, 9090, 3100, 3200, 9009)
+    and not fd.sip in ("127.0.0.1", "::1")
+  output: "Unexpected outbound connection (user=%user.name command=%proc.cmdline connection=%fd.name)"
+  priority: NOTICE
+  tags: [network, observability-boilerplate]

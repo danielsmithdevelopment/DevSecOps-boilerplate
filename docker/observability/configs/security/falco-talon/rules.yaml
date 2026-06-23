@@ -1,0 +1,4 @@
+- action: Log
+  actionn: log
+  rules:
+    - Unexpected outbound connection

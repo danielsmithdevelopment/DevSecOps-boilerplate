@@ -1,70 +1,29 @@
-name: logging
+# Worker cluster demo + shared observability stack.
+#   docker compose up -d
+#   docker compose --profile loadtest run --rm k6
+
+include:
+  - path: ../../../docker/observability/docker-compose.yaml
+
 services:
   app:
     build: .
-    ports: [4200:4200]
+    ports:
+      - "4200:4200"
     labels:
-      logging: promtail
+      logging: alloy
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
       OTEL_EXPORTER_OTLP_INSECURE: "true"
       OTEL_SERVICE_NAME: worker-cluster
-
-  loki:
-    image: grafana/loki:3.3.2
-    command: -config.file=/etc/loki/local-config.yaml
-    volumes: [./data/loki:/loki]
-
-  promtail:
-    image: grafana/promtail:3.3.2
-    command: -config.file=/etc/promtail/docker-config.yaml
-    volumes:
-      - ./configs/promtail.yaml:/etc/promtail/docker-config.yaml
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    depends_on: [loki]
-
-  grafana:
-    image: grafana/grafana:11.4.0
-    ports: [3000:3000]
-    volumes:
-      - ./configs/grafana.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
-    depends_on: [prometheus, mimir, loki, tempo]
+    networks:
+      - observability
 
   prometheus:
-    image: prom/prometheus:v3.2.1
-    ports: [9090:9090]
     volumes:
-      - ./configs/prometheus.yaml:/etc/prometheus/prometheus.yml
-    depends_on: [mimir]
+      - ./configs/prometheus-app.yml:/etc/prometheus/prometheus.yml:ro
+      - ../../../docker/observability/configs/mimir/rules:/etc/prometheus/rules:ro
 
-  tempo:
-    image: grafana/tempo:2.6.1
-    command: ["-config.file=/etc/tempo/tempo.yaml"]
-    volumes:
-      - ./configs/tempo.yaml:/etc/tempo/tempo.yaml
-      - tempo_data:/tmp/tempo
-    ports:
-      - "3200:3200"
-
-  mimir:
-    image: grafana/mimir:2.14.3
-    command: ["-config.file=/etc/mimir/mimir.yaml"]
-    volumes:
-      - ./configs/mimir.yaml:/etc/mimir/mimir.yaml
-      - mimir_data:/data/mimir
-    ports: [9009:9009]
-
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.116.1
-    command: ["--config=/etc/otel-collector.yaml"]
-    volumes:
-      - ./configs/otel-collector.yaml:/etc/otel-collector.yaml
-    ports:
-      - "4317:4317"
-      - "4318:4318"
-    depends_on: [loki, tempo, mimir]
-
-volumes:
-  tempo_data:
-  mimir_data:
+  k6:
+    environment:
+      K6_TARGET_URL: http://app:4200
