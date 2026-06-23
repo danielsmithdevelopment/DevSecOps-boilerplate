@@ -1,0 +1,274 @@
+# Full Grafana observability stack + OTel collector.
+# Usage:
+#   cp .env.example .env
+#   docker compose -f docker/observability/docker-compose.yaml up -d
+#
+# Optional profiles:
+#   --profile loadtest   run k6 against K6_TARGET_URL
+#   --profile security   also: docker compose -f docker-compose.security.yaml up -d
+
+name: observability
+
+x-logging: &loki-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  loki:
+    image: grafana/loki:3.3.2
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./configs/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/loki.yaml
+    networks:
+      - observability
+    logging: *loki-logging
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    user: "0"
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./configs/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/tmp/tempo
+    ports:
+      - "3200:3200"
+    networks:
+      - observability
+    logging: *loki-logging
+
+  mimir:
+    image: grafana/mimir:2.14.3
+    command: ["-config.file=/etc/mimir/mimir.yaml"]
+    volumes:
+      - ./configs/mimir/mimir.yaml:/etc/mimir/mimir.yaml:ro
+      - ./configs/mimir/rules:/etc/mimir/rules:ro
+      - mimir-data:/data/mimir
+    ports:
+      - "9009:9009"
+    networks:
+      - observability
+    logging: *loki-logging
+
+  pyroscope:
+    image: grafana/pyroscope:1.13.1
+    command: ["-config.file=/etc/pyroscope/pyroscope.yaml"]
+    volumes:
+      - ./configs/pyroscope/pyroscope.yaml:/etc/pyroscope/pyroscope.yaml:ro
+      - pyroscope-data:/data/pyroscope
+    ports:
+      - "4040:4040"
+    networks:
+      - observability
+    logging: *loki-logging
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./configs/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/mimir/rules:/etc/prometheus/rules:ro
+    depends_on:
+      - mimir
+      - alertmanager
+    networks:
+      - observability
+    logging: *loki-logging
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./configs/alertmanager/alertmanager.yaml:/etc/alertmanager/alertmanager.yml:ro
+    networks:
+      - observability
+    logging: *loki-logging
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    command: ["--config=/etc/otel-collector/config.yaml"]
+    volumes:
+      - ./configs/otel-collector/config.yaml:/etc/otel-collector/config.yaml:ro
+    ports:
+      - "14317:4317"
+      - "14318:4318"
+    depends_on:
+      - loki
+      - tempo
+      - mimir
+      - pyroscope
+    networks:
+      - observability
+    logging: *loki-logging
+
+  alloy:
+    image: grafana/alloy:v1.17.0
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+    volumes:
+      - ./configs/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - alloy-data:/var/lib/alloy
+    ports:
+      - "12345:12345"
+      - "8027:8027"
+      - "4319:4319"
+      - "4320:4320"
+    depends_on:
+      - loki
+      - tempo
+      - mimir
+    networks:
+      - observability
+    logging: *loki-logging
+
+  beyla:
+    image: grafana/beyla:2.0.5
+    privileged: true
+    pid: host
+    environment:
+      BEYLA_OPEN_PORT: ${BEYLA_OPEN_PORT:-8080}
+      BEYLA_PRINT_TRACES: "false"
+      BEYLA_PROMETHEUS_PORT: "9090"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+    volumes:
+      - /sys/kernel/debug:/sys/kernel/debug:ro
+    depends_on:
+      - otel-collector
+    networks:
+      - observability
+    logging: *loki-logging
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    env_file:
+      - .env
+    environment:
+      GF_INSTALL_PLUGINS: grafana-pyroscope-app,grafana-oncall-app
+      GF_FEATURE_TOGGLES_ENABLE: traceToProfiles,traceqlEditor
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./configs/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./configs/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./configs/grafana/dashboards:/etc/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - mimir
+      - loki
+      - tempo
+      - pyroscope
+      - alertmanager
+    networks:
+      - observability
+    logging: *loki-logging
+
+  # Grafana OnCall OSS (archived but functional for dev/incident routing)
+  oncall-redis:
+    image: redis:7.4.2-alpine
+    networks:
+      - observability
+    logging: *loki-logging
+
+  oncall-rabbitmq:
+    image: rabbitmq:3.13.7-management-alpine
+    networks:
+      - observability
+    logging: *loki-logging
+
+  oncall-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: oncall
+      POSTGRES_PASSWORD: oncall
+      POSTGRES_DB: oncall
+    volumes:
+      - oncall-db-data:/var/lib/postgresql/data
+    networks:
+      - observability
+    logging: *loki-logging
+
+  oncall-engine:
+    image: grafana/oncall:v1.16.11
+    env_file:
+      - .env
+    environment:
+      DATABASE_TYPE: sqlite3
+      BROKER_TYPE: redis
+      BASE_URL: ${ONCALL_BASE_URL:-http://localhost:8080}
+      SECRET_KEY: ${ONCALL_SECRET_KEY:-dev-oncall-secret-key-min-32-chars-long}
+      FEATURE_PROMETHEUS_EXPORTER_ENABLED: "true"
+      PROMETHEUS_EXPORTER_SECRET: oncall-metrics
+      REDIS_URI: redis://oncall-redis:6379/0
+      RABBITMQ_URI: amqp://guest:guest@oncall-rabbitmq:5672/
+      DJANGO_SETTINGS_MODULE: settings.hobby
+      OSS: "True"
+      ONCALL_API_URL: http://oncall-engine:8080
+    ports:
+      - "8090:8080"
+    depends_on:
+      - oncall-redis
+      - oncall-rabbitmq
+      - oncall-db
+    networks:
+      - observability
+    logging: *loki-logging
+
+  oncall-celery:
+    image: grafana/oncall:v1.16.11
+    environment:
+      DATABASE_TYPE: sqlite3
+      BROKER_TYPE: redis
+      SECRET_KEY: ${ONCALL_SECRET_KEY:-dev-oncall-secret-key-min-32-chars-long}
+      REDIS_URI: redis://oncall-redis:6379/0
+      RABBITMQ_URI: amqp://guest:guest@oncall-rabbitmq:5672/
+      DJANGO_SETTINGS_MODULE: settings.hobby
+      OSS: "True"
+    command: ./celery_with_exporter.sh
+    depends_on:
+      - oncall-engine
+    networks:
+      - observability
+    logging: *loki-logging
+
+  k6:
+    profiles: [loadtest]
+    image: grafana/k6:0.57.0
+    volumes:
+      - ./configs/k6:/scripts:ro
+    environment:
+      K6_TARGET_URL: ${K6_TARGET_URL:-http://task-runner-1:8080}
+      K6_OUT: experimental-prometheus-rw
+      K6_PROMETHEUS_RW_SERVER_URL: http://mimir:9009/api/v1/push
+      K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM: "true"
+    command: run /scripts/loadtest.js
+    depends_on:
+      - mimir
+    networks:
+      - observability
+
+networks:
+  observability:
+    name: observability
+    driver: bridge
+
+volumes:
+  loki-data:
+  tempo-data:
+  mimir-data:
+  pyroscope-data:
+  grafana-data:
+  alloy-data:
+  oncall-db-data:

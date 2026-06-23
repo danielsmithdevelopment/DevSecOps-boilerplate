@@ -1,9 +1,20 @@
+# Task runner cluster + shared observability stack.
+#   cp .env.example .env
+#   docker compose up -d
+#
+# Observability UI: http://localhost:3000 (admin / GF_SECURITY_ADMIN_PASSWORD)
+# OnCall engine:    http://localhost:8090
+
+include:
+  - path: ../docker/observability/docker-compose.yaml
+    env_file: .env
+
 x-task-runner-common: &task-runner-common
   build: .
   env_file:
     - .env
   networks:
-    - task-runner-network
+    - observability
   restart: unless-stopped
   healthcheck:
     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -32,8 +43,6 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
       OTEL_EXPORTER_OTLP_INSECURE: "true"
       OTEL_SERVICE_NAME: task-runner
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
 
   task-runner-3:
     <<: *task-runner-common
@@ -44,8 +53,6 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
       OTEL_EXPORTER_OTLP_INSECURE: "true"
       OTEL_SERVICE_NAME: task-runner
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
 
   task-runner-4:
     <<: *task-runner-common
@@ -56,8 +63,6 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
       OTEL_EXPORTER_OTLP_INSECURE: "true"
       OTEL_SERVICE_NAME: task-runner
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8083/health"]
 
   task-runner-5:
     <<: *task-runner-common
@@ -68,8 +73,6 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
       OTEL_EXPORTER_OTLP_INSECURE: "true"
       OTEL_SERVICE_NAME: task-runner
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8084/health"]
 
   postgres:
     image: postgres:15-alpine
@@ -84,107 +87,18 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - task-runner-network
+      - observability
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U taskrunner"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-taskrunner}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   prometheus:
-    image: prom/prometheus:v3.2.1
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-    depends_on:
-      - mimir
-    networks:
-      - task-runner-network
-
-  grafana:
-    image: grafana/grafana:11.4.0
-    env_file:
-      - .env
-    environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./configs/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
-    depends_on:
-      - prometheus
-      - mimir
-      - loki
-      - tempo
-    networks:
-      - task-runner-network
-
-  loki:
-    image: grafana/loki:3.3.2
-    ports:
-      - "3100:3100"
-    command: -config.file=/etc/loki/local-config.yaml
-    networks:
-      - task-runner-network
-
-  tempo:
-    image: grafana/tempo:2.6.1
-    command: ["-config.file=/etc/tempo/tempo.yaml"]
-    volumes:
-      - ./configs/tempo.yaml:/etc/tempo/tempo.yaml
-      - tempo-data:/tmp/tempo
-    ports:
-      - "3200:3200"
-    networks:
-      - task-runner-network
-
-  promtail:
-    image: grafana/promtail:3.3.2
-    volumes:
-      - ./configs/promtail-config.yaml:/etc/promtail/config.yaml
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: -config.file=/etc/promtail/config.yaml
-    depends_on:
-      - loki
-    networks:
-      - task-runner-network
-
-  mimir:
-    image: grafana/mimir:2.14.3
-    command: ["-config.file=/etc/mimir/mimir.yaml"]
-    volumes:
-      - ./configs/mimir.yaml:/etc/mimir/mimir.yaml
-      - mimir-data:/data/mimir
-    ports:
-      - "9009:9009"
-    networks:
-      - task-runner-network
-
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.116.1
-    command: ["--config=/etc/otel-collector.yaml"]
-    volumes:
-      - ./configs/otel-collector.yaml:/etc/otel-collector.yaml
-    ports:
-      - "4317:4317"
-      - "4318:4318"
-    depends_on:
-      - loki
-      - tempo
-      - mimir
-    networks:
-      - task-runner-network
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../docker/observability/configs/mimir/rules:/etc/prometheus/rules:ro
 
 volumes:
   postgres-data:
-  grafana-data:
-  tempo-data:
-  mimir-data:
-
-networks:
-  task-runner-network:
-    driver: bridge

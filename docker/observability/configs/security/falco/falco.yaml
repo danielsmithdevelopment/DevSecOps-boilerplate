@@ -1,0 +1,25 @@
+# Minimal Falco override — rules live in rules.d/
+json_output: true
+json_include_output_property: true
+log_stderr: true
+log_syslog: false
+priority: notice
+
+grpc:
+  enabled: true
+  bind_address: "0.0.0.0:5060"
+  threadiness: 8
+
+http_output:
+  enabled: true
+  url: "http://falcosidekick:2801/"
+
+metrics:
+  enabled: true
+  interval: 1h
+  output_rule: true
+  resource: false
+  state: true
+  kernel_event_counters: true
+  libbpf_stats: true
+  convert_memory_to_mb: true

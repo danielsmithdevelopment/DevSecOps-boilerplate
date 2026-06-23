@@ -1,0 +1,23 @@
+groups:
+  - name: task-runner
+    rules:
+      - alert: TaskRunnerDown
+        expr: up{job="task-runner"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Task runner instance down
+          description: "Task runner target {{ $labels.instance }} has been unreachable for 2 minutes."
+
+      - alert: TaskRunnerHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (instance)
+          /
+          sum(rate(http_requests_total[5m])) by (instance) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Elevated 5xx error rate on task runner
+          description: "Instance {{ $labels.instance }} is returning more than 5% 5xx responses."
