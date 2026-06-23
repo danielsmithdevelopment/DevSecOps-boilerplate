@@ -3,7 +3,7 @@ module github.com/yourusername/wallet-auth
 go 1.25.11
 
 require (
-	github.com/aws/aws-sdk-go v1.50.0
+	github.com/aws/aws-sdk-go v1.55.8
 	github.com/ethereum/go-ethereum v1.17.3
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
