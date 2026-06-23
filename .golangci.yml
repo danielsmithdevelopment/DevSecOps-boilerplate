@@ -19,3 +19,8 @@ issues:
     - path: _test\.go
       linters:
         - errcheck
+    # aws-sdk-go v1 until SES migrates to aws-sdk-go-v2 (Dependabot still patches v1).
+    - path: wallet-auth/backend/internal/email/ses\.go
+      linters:
+        - staticcheck
+      text: "is deprecated"
