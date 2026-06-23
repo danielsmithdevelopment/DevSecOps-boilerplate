@@ -2,6 +2,8 @@
 
 Full Grafana LGTM+ platform with OpenTelemetry, profiling, frontend telemetry, load testing, incident response, and optional runtime security tooling.
 
+> **Full documentation:** [docs/observability/](../../docs/observability/README.md) — one page per component with configuration and official resource links.
+
 ## Components
 
 | Layer | Services | Purpose |
