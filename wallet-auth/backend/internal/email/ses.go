@@ -1,3 +1,4 @@
+//nolint:staticcheck // aws-sdk-go v1 until SES migrates to aws-sdk-go-v2.
 package email
 
 import (

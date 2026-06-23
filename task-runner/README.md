@@ -2,6 +2,8 @@
 
 A golang-based distributed task runner that clusters together with any number of other running replicas to execute tasks on predetermined schedules and aggregate results.
 
+> **Full documentation:** [docs/applications/task-runner.md](../docs/applications/task-runner.md)
+
 ## Features
 
 - Task scheduling using cron syntax
