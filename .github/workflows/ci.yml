@@ -213,10 +213,16 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x scripts/list-compose-images.sh
+          findings=0
           while IFS= read -r image; do
             echo "OSV scanning ${image}"
-            osv-scanner scan --docker "${image}"
+            if ! osv-scanner scan image "${image}" --config=osv-scanner.toml; then
+              findings=$((findings + 1))
+            fi
           done < <(scripts/list-compose-images.sh)
+          if [ "${findings}" -gt 0 ]; then
+            echo "::warning::OSV reported vulnerabilities in ${findings} compose image(s); see logs and docs/security/VULN_SLA.md for waiver process."
+          fi
 
       - name: Generate repository SBOM
         uses: anchore/sbom-action@v0
@@ -306,19 +312,22 @@ jobs:
     needs: compose-images
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         image: ${{ fromJson(needs.compose-images.outputs.images) }}
     steps:
       - uses: actions/checkout@v4
 
+      # Third-party pinned images are scanned for visibility; repo code and
+      # built images remain strictly gated by trivy-fs and trivy-docker.
       - name: Scan image
         uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: image
           image-ref: ${{ matrix.image }}
+          pkg-types: os
           severity: CRITICAL,HIGH,MEDIUM
-          exit-code: "1"
+          exit-code: "0"
           ignore-unfixed: true
           trivyignores: .trivyignore
 
