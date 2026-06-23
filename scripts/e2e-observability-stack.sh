@@ -43,22 +43,6 @@ wait_http() {
   return 1
 }
 
-wait_cmd() {
-  local name="$1" max="${2:-120}"
-  shift 2
-  local i=0
-  while [ "$i" -lt "$max" ]; do
-    if "$@" >/dev/null 2>&1; then
-      log_pass "$name"
-      return 0
-    fi
-    sleep 2
-    i=$((i + 2))
-  done
-  log_fail "$name (timeout ${max}s)"
-  return 1
-}
-
 ensure_env() {
   local dir="$1"
   if [ ! -f "$dir/.env" ]; then

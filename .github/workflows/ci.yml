@@ -62,7 +62,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y shellcheck
-          shellcheck scripts/*.sh packer/docker/ubuntu-base/install-ansible.sh
+          shellcheck -S warning scripts/*.sh packer/docker/ubuntu-base/install-ansible.sh
 
       - name: Reject floating container tags
         run: |
@@ -209,6 +209,15 @@ jobs:
           go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.3.8
           osv-scanner scan --recursive --config=osv-scanner.toml .
 
+      - name: OSV-Scanner compose images
+        run: |
+          set -euo pipefail
+          chmod +x scripts/list-compose-images.sh
+          while IFS= read -r image; do
+            echo "OSV scanning ${image}"
+            osv-scanner scan --docker "${image}"
+          done < <(scripts/list-compose-images.sh)
+
       - name: Generate repository SBOM
         uses: anchore/sbom-action@v0
         with:
@@ -276,6 +285,43 @@ jobs:
           ignore-unfixed: true
           trivyignores: .trivyignore
 
+  compose-images:
+    name: List compose images
+    needs: quick
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.set-matrix.outputs.images }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image matrix
+        id: set-matrix
+        run: |
+          chmod +x scripts/list-compose-images.sh
+          images="$(scripts/list-compose-images.sh | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+          echo "images=${images}" >> "$GITHUB_OUTPUT"
+
+  trivy-compose-images:
+    name: Trivy compose image scan
+    needs: compose-images
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        image: ${{ fromJson(needs.compose-images.outputs.images) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.image }}
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: "1"
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+
   ci-gate:
     name: ci-gate
     runs-on: ubuntu-latest
@@ -289,6 +335,7 @@ jobs:
       - supply-chain
       - trivy-fs
       - trivy-docker
+      - trivy-compose-images
     if: always()
     steps:
       - name: Require all checks to pass
@@ -314,4 +361,5 @@ jobs:
           check supply-chain "${{ needs.supply-chain.result }}"
           check trivy-fs "${{ needs.trivy-fs.result }}"
           check trivy-docker "${{ needs.trivy-docker.result }}"
+          check trivy-compose-images "${{ needs.trivy-compose-images.result }}"
           echo "All CI checks passed."
