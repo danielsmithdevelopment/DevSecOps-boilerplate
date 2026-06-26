@@ -232,7 +232,7 @@ jobs:
           output-file: sbom-repository.cdx.json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-repository-cyclonedx
           path: sbom-repository.cdx.json
