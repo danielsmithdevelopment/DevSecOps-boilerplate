@@ -1,0 +1,35 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: pagerduty-prod
+    receivers:
+      - uid: pagerduty-prod
+        type: pagerduty
+        settings:
+          # Set via Grafana UI or env substitution in production; placeholder for boilerplate.
+          integrationKey: ${PAGERDUTY_INTEGRATION_KEY}
+          severity: critical
+  - orgId: 1
+    name: oncall-default
+    receivers:
+      - uid: oncall-webhook
+        type: webhook
+        settings:
+          url: http://oncall-engine:8080/integrations/v1/alertmanager/
+          httpMethod: POST
+
+policies:
+  - orgId: 1
+    receiver: oncall-default
+    group_by:
+      - grafana_folder
+      - alertname
+    routes:
+      - receiver: pagerduty-prod
+        object_matchers:
+          - ["severity", "=", "critical"]
+        continue: false
+      - receiver: oncall-default
+        object_matchers:
+          - ["severity", "=", "warning"]

@@ -1,0 +1,20 @@
+name = "telemetry-ingest"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Public route browsers / Faro SDKs hit. Secrets never go in this file —
+# set them with: echo "$KEY" | wrangler secret put JWT_SIGNING_KEY
+[vars]
+ALLOY_INGEST_URL = "https://alloy.example.com/collect"
+ALLOWED_ORIGINS = "https://app.example.com"
+PROJECT_ID = "frontend-prod"
+# Max events per session per rolling minute
+RATE_LIMIT_PER_MINUTE = "60"
+# Max JSON body size in bytes
+MAX_BODY_BYTES = "65536"
+
+# Optional: private R2 bucket holding source maps keyed by release/file
+# [[r2_buckets]]
+# binding = "SOURCEMAPS"
+# bucket_name = "frontend-sourcemaps"

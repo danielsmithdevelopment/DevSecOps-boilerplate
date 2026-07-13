@@ -5,16 +5,20 @@
 ## Architecture
 
 ```
+Browser ──Faro + JWT──► Cloudflare Worker ──► Alloy Faro (:8027)
+                                                ├──► Loki / Tempo
 Apps ──OTLP──► OTel Collector ──┬──► Tempo (traces)
                                 ├──► Mimir  (metrics)
                                 └──► Loki   (logs)
 
-Browser ──Faro──► Alloy ────────┬──► Tempo / Loki
-Docker logs ──► Alloy ──────────┘
+Browser (local only) ──Faro──► Alloy ────────┬──► Tempo / Loki
+Docker logs ──► Alloy ───────────────────────┘
+Security syslog ──► Alloy :1516 ─────────────► Loki
 
 Beyla (eBPF) ──OTLP──► OTel Collector
 
 Prometheus ──remote_write──► Mimir ──rules──► Alertmanager ──► OnCall
+Loki ruler (LogQL) ─────────────────────────► Alertmanager
 ```
 
 ## Quick start
@@ -74,14 +78,16 @@ docker compose -f docker/observability/docker-compose.security.yaml up -d
 docker/observability/
 ├── docker-compose.yaml           # core stack
 ├── docker-compose.security.yaml  # Falco, Talon, Tetragon, Wazuh
+├── worker/                       # Cloudflare Worker (JWT-gated Faro proxy)
+├── faro/                         # browser Faro init + fingerprinting
 ├── .env.example
 └── configs/
     ├── alloy/ loki/ tempo/ mimir/ pyroscope/
     ├── prometheus/ alertmanager/
     ├── otel-collector/
-    ├── grafana/                  # datasources + dashboards
-    ├── k6/
-    └── security/
+    ├── grafana/                  # datasources + dashboards + alerting
+    ├── k6/                       # loadtest + synthetic-check
+    └── security/                 # falco, falco-talon, tetragon, wazuh
 ```
 
 ## Compose includes

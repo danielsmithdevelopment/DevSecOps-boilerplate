@@ -22,6 +22,7 @@ services:
       - "3100:3100"
     volumes:
       - ./configs/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - ./configs/loki/rules:/loki/rules:ro
       - loki-data:/loki
     command: -config.file=/etc/loki/loki.yaml
     networks:
@@ -124,6 +125,7 @@ services:
       - "8027:8027"
       - "4319:4319"
       - "4320:4320"
+      - "1516:1516"  # syslog → Loki (security events; avoid Wazuh 1514)
     depends_on:
       - loki
       - tempo
@@ -163,6 +165,7 @@ services:
       - grafana-data:/var/lib/grafana
       - ./configs/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./configs/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./configs/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
       - ./configs/grafana/dashboards:/etc/grafana/dashboards:ro
     depends_on:
       - prometheus
@@ -254,6 +257,22 @@ services:
       K6_PROMETHEUS_RW_SERVER_URL: http://mimir:9009/api/v1/push
       K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM: "true"
     command: run /scripts/loadtest.js
+    depends_on:
+      - mimir
+    networks:
+      - observability
+
+  k6-synthetic:
+    profiles: [synthetic]
+    image: grafana/k6:0.57.0
+    volumes:
+      - ./configs/k6:/scripts:ro
+    environment:
+      K6_TARGET_URL: ${K6_TARGET_URL:-http://task-runner-1:8080}
+      K6_OUT: experimental-prometheus-rw
+      K6_PROMETHEUS_RW_SERVER_URL: http://mimir:9009/api/v1/push
+      K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM: "true"
+    command: run /scripts/synthetic-check.js
     depends_on:
       - mimir
     networks:

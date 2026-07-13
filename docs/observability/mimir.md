@@ -26,18 +26,13 @@ curl 'http://localhost:9009/prometheus/api/v1/query?query=up'
 - **Filesystem storage** for blocks (dev/single-node layout)
 - **Ruler** for alerting rule evaluation
 - **Alertmanager** integration for firing alerts
+- **Ingestion limits:** `ingestion_rate: 10000`, `ingestion_burst_size: 200000`, `compactor_blocks_retention_period: 90d`, `max_label_names_per_series: 30`
+
+Watch `cortex_discarded_samples_total` from day one — Beyla + high-cardinality labels can hit the rate limit silently. Use the **High cardinality** Grafana dashboard.
 
 ### Alert rules
 
-Rules live in `configs/mimir/rules/`. Example: `task-runner.yaml` defines alerts for task execution failures.
-
-```yaml
-groups:
-  - name: task-runner
-    rules:
-      - alert: TaskExecutionFailed
-        expr: ...
-```
+Rules live in `configs/mimir/rules/` (PromQL). LogQL frontend/security alerts live under `configs/loki/rules/` — see [Loki](loki.md).
 
 ## Making changes
 

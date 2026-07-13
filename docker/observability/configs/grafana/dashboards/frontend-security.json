@@ -1,0 +1,58 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "sum by (error_fingerprint) (count_over_time({app=\"frontend\", level=\"error\"} | json [1h]))",
+          "legendFormat": "{{error_fingerprint}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Frontend errors by fingerprint (1h)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "{job=~\"syslog|tetragon|falco\"} |= \"npx\" or {job=~\"syslog|tetragon|falco\"} |= \"npm\"",
+          "refId": "A"
+        }
+      ],
+      "title": "Package manager runtime events",
+      "type": "logs"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "{pipeline=\"security\"} or {job=~\"falco|tetragon|wazuh\"}",
+          "refId": "A"
+        }
+      ],
+      "title": "Security event stream",
+      "type": "logs"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["security", "faro", "sentry-replacement"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Frontend errors & runtime security",
+  "uid": "frontend-security",
+  "version": 1
+}

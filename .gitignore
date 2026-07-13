@@ -4,6 +4,11 @@
 !.env.example
 !**/.env.example
 
+# Node / Worker tooling
+**/node_modules/
+**/.wrangler/
+**/dist/
+
 # Local .terraform directories
 **/.terraform/*
 

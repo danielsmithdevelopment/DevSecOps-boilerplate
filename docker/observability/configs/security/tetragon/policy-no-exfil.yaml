@@ -1,0 +1,33 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-exfil-tools
+  annotations:
+    description: >
+      Detect (then later enforce) common exfil / reverse-shell tooling.
+      Keep in Monitor (Post) until you confirm no false positives.
+spec:
+  kprobes:
+    - call: "sys_execve"
+      syscall: true
+      args:
+        - index: 0
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "Postfix"
+              values:
+                - "/curl"
+                - "/wget"
+                - "/nc"
+                - "/ncat"
+                - "/socat"
+          matchNamespaces:
+            - operator: NotIn
+              values:
+                - "ci"
+                - "build"
+                - "monitoring"
+          matchActions:
+            - action: Post
