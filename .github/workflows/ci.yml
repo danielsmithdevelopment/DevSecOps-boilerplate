@@ -113,7 +113,7 @@ jobs:
       - name: Verify terraform fmt
         run: terraform fmt -check -recursive terraform/
 
-      - uses: terraform-linters/setup-tflint@v4
+      - uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: v0.54.0
 
