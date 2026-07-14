@@ -1,6 +1,6 @@
 module prod
 
-go 1.25.11
+go 1.25.12
 
 require (
 	github.com/pulumi/pulumi-aws-apigateway/sdk/v2 v2.6.3

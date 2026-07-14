@@ -1,0 +1,20 @@
+{
+  "name": "@devsecops/faro-gated-init",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Grafana Faro initialization with JWT-gated Worker transport and error fingerprinting",
+  "type": "module",
+  "main": "src/faro-init.ts",
+  "exports": {
+    ".": "./src/faro-init.ts",
+    "./fingerprint": "./src/fingerprint.ts",
+    "./token": "./src/token.ts"
+  },
+  "peerDependencies": {
+    "@grafana/faro-web-sdk": "^1.12.0"
+  },
+  "devDependencies": {
+    "@grafana/faro-web-sdk": "^1.12.0",
+    "typescript": "^5.8.2"
+  }
+}

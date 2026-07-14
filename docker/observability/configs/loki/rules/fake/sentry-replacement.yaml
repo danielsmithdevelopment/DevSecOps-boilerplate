@@ -1,0 +1,83 @@
+groups:
+  - name: frontend-errors
+    interval: 1m
+    rules:
+      - alert: HighFrontendErrorRate
+        expr: |
+          sum(rate({app="frontend", level="error"}[5m])) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: High frontend error rate
+          description: Frontend error log rate exceeded 10/s over 2 minutes.
+
+      - alert: NewErrorFingerprint
+        expr: |
+          sum by (error_fingerprint) (
+            count_over_time({app="frontend", level="error"} | json | __error__="" | error_fingerprint != "" [10m])
+          ) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "New or active frontend error fingerprint {{ $labels.error_fingerprint }}"
+          description: >
+            Fingerprint {{ $labels.error_fingerprint }} is producing errors.
+            Compare against a 24h Explore query offline for true "new issue" detection;
+            Loki ruler keeps this rule PromQL/LogQL-evaluable without offset joins.
+
+      - alert: ClientErrorWithTraceID
+        expr: |
+          sum(
+            count_over_time(
+              {app="frontend", level="error"}
+              | json
+              | __error__=""
+              | traceID != ""
+              [5m]
+            )
+          ) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: Client error with trace ID — verify matching server span in Tempo
+          description: >
+            Frontend errors carried a traceID. Absence of a matching server-side span
+            in Tempo is a strong signal of possible fake-event injection.
+
+  - name: agent-security
+    interval: 1m
+    rules:
+      - alert: UnexpectedAgentToolUse
+        expr: |
+          sum by (tool_name) (
+            count_over_time(
+              {service="langfuse"}
+              | json
+              | __error__=""
+              | tool_name !~ "allowed_tool_1|allowed_tool_2|allowed_tool_3"
+              [5m]
+            )
+          ) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Agent invoked unexpected tool: {{ $labels.tool_name }}"
+          description: >
+            Langfuse recorded a tool invocation outside the configured allowlist.
+            Investigate for prompt-injection before any automated remediation.
+
+      - alert: PackageManagerRuntimeEvent
+        expr: |
+          sum(
+            count_over_time({job=~"tetragon|syslog|falco"} |= "npx" or {job=~"tetragon|syslog|falco"} |= "npm" [5m])
+          ) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: Package manager execution observed by runtime security
+          description: Tetragon/Falco logged npm/npx activity — review the frontend-security dashboard.

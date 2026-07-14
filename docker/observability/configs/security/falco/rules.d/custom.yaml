@@ -1,8 +1,38 @@
+# Custom Falco rules for the observability / AI-agent threat model.
+# Loaded from /etc/falco/rules.d alongside default rules.
+
 - rule: Unexpected outbound connection
-  desc: Detect outbound connections to non-private IPs
+  desc: Detect outbound connections to non-private IPs on unusual ports
   condition: >
     outbound and not fd.sport in (53, 443, 80, 4317, 4318, 9090, 3100, 3200, 9009)
     and not fd.sip in ("127.0.0.1", "::1")
   output: "Unexpected outbound connection (user=%user.name command=%proc.cmdline connection=%fd.name)"
   priority: NOTICE
   tags: [network, observability-boilerplate]
+
+- rule: Unexpected package manager in container
+  desc: >
+    Detect npm/npx/pip/yarn execution inside containers — matches the Nutrient
+    incident pattern where an agent almost ran a malicious npx payload.
+  condition: >
+    spawned_process and container
+    and proc.name in (npm, npx, yarn, pnpm, pip, pip3)
+    and not container.image.repository in (ci-builder, buildkit)
+  output: >
+    Unexpected package manager in container
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [process, mitre_execution, observability-boilerplate, nutrient]
+
+- rule: Terminal shell in container
+  desc: Interactive shell inside a container (often post-exploitation)
+  condition: >
+    spawned_process and container
+    and proc.name in (sh, bash, zsh, ash)
+    and proc.tty != 0
+    and not container.image.repository in (ci-builder, debug-tools)
+  output: >
+    Terminal shell in container
+    (user=%user.name command=%proc.cmdline container=%container.name)
+  priority: WARNING
+  tags: [shell, mitre_execution, observability-boilerplate]

@@ -1,0 +1,34 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-package-managers
+  annotations:
+    description: >
+      Kill package-manager executions outside build/ci namespaces.
+      Start in Monitor mode (matchActions: Post) before enabling Sigkill.
+spec:
+  kprobes:
+    - call: "sys_execve"
+      syscall: true
+      args:
+        - index: 0
+          type: "string"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "Postfix"
+              values:
+                - "/npm"
+                - "/npx"
+                - "/pip"
+                - "/pip3"
+                - "/yarn"
+                - "/pnpm"
+          matchNamespaces:
+            - operator: NotIn
+              values:
+                - "ci"
+                - "build"
+          # Monitor first: change Post → Sigkill after baselining.
+          matchActions:
+            - action: Post

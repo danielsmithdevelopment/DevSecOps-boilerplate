@@ -12,6 +12,7 @@ Sample workloads that demonstrate DevSecOps patterns (observability, auth, distr
 | [grafana-stack app](applications/grafana-stack.md) | Go data-ingestion demo wired to the observability stack |
 | [worker-cluster](applications/worker-cluster.md) | Fiber HTTP demo app and k6 load-test target |
 | [wallet-auth](applications/wallet-auth.md) | SIWE wallet + email auth (Go backend, React frontend) |
+| [telemetry-ingest-worker](applications/telemetry-ingest-worker.md) | JWT-gated Cloudflare Worker + Faro helpers (closes public DSN vector) |
 
 ## Observability
 

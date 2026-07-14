@@ -64,7 +64,7 @@ services:
     pid: host
     volumes:
       - /sys/kernel/btf/vmlinux:/var/run/cilium/tetragon/btf
-      - ./configs/security/tetragon/tracing-policy.yaml:/etc/tetragon/tp/custom.yaml:ro
+      - ./configs/security/tetragon:/etc/tetragon/tp:ro
     command:
       - /usr/bin/tetragon
       - --config-dir=/etc/tetragon/tp
@@ -110,6 +110,7 @@ services:
       - "55000:55000"
     volumes:
       - wazuh-manager-data:/var/ossec/data
+      - ./configs/security/wazuh/ossec.conf:/wazuh-config-mount/etc/ossec.conf:ro
     networks:
       - observability
     restart: unless-stopped

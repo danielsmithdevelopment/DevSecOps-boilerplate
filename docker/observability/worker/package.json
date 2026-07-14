@@ -1,0 +1,23 @@
+{
+  "name": "@devsecops/telemetry-ingest-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "JWT-gated Cloudflare Worker proxy for Grafana Faro ingest — closes the static public DSN attack vector",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260713.1",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.9",
+    "wrangler": "4.110.0"
+  },
+  "overrides": {
+    "esbuild": ">=0.25.0",
+    "undici": ">=6.27.0",
+    "ws": ">=8.21.0"
+  }
+}

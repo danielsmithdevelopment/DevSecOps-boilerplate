@@ -2,6 +2,8 @@ apiVersion: cilium.io/v1alpha1
 kind: TracingPolicy
 metadata:
   name: devsecops-boilerplate
+  annotations:
+    description: Baseline shell exec observability (Monitor mode).
 spec:
   kprobes:
     - call: sys_execve

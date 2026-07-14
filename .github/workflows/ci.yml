@@ -169,7 +169,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.11"
+          go-version: "1.25.12"
           cache-dependency-path: ${{ matrix.module }}/go.sum
 
       - name: Verify gofmt
@@ -202,7 +202,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.11"
+          go-version: "1.25.12"
 
       - name: OSV-Scanner
         run: |

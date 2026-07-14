@@ -1,0 +1,13 @@
+groups:
+  - name: ingestion-health
+    rules:
+      - alert: MimirDiscardingSamples
+        expr: increase(cortex_discarded_samples_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Mimir is discarding samples
+          description: >
+            cortex_discarded_samples_total is increasing. Check ingestion_rate limits
+            and high-cardinality labels (see high-cardinality dashboard).

@@ -12,6 +12,17 @@ loki.source.docker "default" {
   forward_to = [loki.write.default.receiver]
 }
 
+// Falco / host security syslog → Loki.
+// Bound on 1516 to avoid colliding with Wazuh manager agent port 1514.
+loki.source.syslog "security" {
+  listener {
+    address  = "0.0.0.0:1516"
+    protocol = "tcp"
+    labels   = { job = "syslog", pipeline = "security" }
+  }
+  forward_to = [loki.write.default.receiver]
+}
+
 loki.write "default" {
   endpoint {
     url = "http://loki:3100/loki/api/v1/push"
@@ -48,9 +59,27 @@ otelcol.receiver.otlp "default" {
   }
 
   output {
-    metrics = [otelcol.exporter.prometheus.mimir.input]
+    metrics = [otelcol.processor.transform.align_metrics.input]
     logs    = [otelcol.exporter.otlphttp.loki.input]
     traces  = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// Convert Delta temporality → Cumulative before Mimir/Prometheus remote_write.
+// Go OTel SDKs often default to Delta; Mimir expects Cumulative. Without this,
+// metrics can be silently dropped or look malformed.
+otelcol.processor.transform "align_metrics" {
+  error_mode = "ignore"
+
+  metric_statements {
+    context = "metric"
+    statements = [
+      `set(temporality, "Cumulative") where temporality == "Delta"`,
+    ]
+  }
+
+  output {
+    metrics = [otelcol.exporter.prometheus.mimir.input]
   }
 }
 
@@ -64,7 +93,28 @@ otelcol.exporter.otlphttp "loki" {
 }
 
 otelcol.exporter.prometheus "mimir" {
+  forward_to = [prometheus.relabel.drop_high_cardinality.receiver]
+}
+
+// Drop per-instance / ephemeral labels that explode cardinality when Beyla
+// instruments many services. Monitor cortex_discarded_samples_total.
+prometheus.relabel "drop_high_cardinality" {
   forward_to = [prometheus.remote_write.mimir.receiver]
+
+  rule {
+    action = "labeldrop"
+    regex  = "container_id"
+  }
+
+  rule {
+    action = "labeldrop"
+    regex  = "pod_template_hash"
+  }
+
+  rule {
+    action = "labeldrop"
+    regex  = ".*_id"
+  }
 }
 
 prometheus.remote_write "mimir" {

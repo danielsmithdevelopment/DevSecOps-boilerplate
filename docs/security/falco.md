@@ -26,7 +26,10 @@ Requires **Linux** with kernel modules and `privileged: true`.
 ## Configuration
 
 - `falco.yaml` — gRPC output, JSON logging, syscall source
-- `rules.d/custom.yaml` — add custom detection rules
+- `rules.d/custom.yaml` — boilerplate detections:
+  - unexpected outbound connections
+  - package managers in containers (`npm`/`npx`/…) — Nutrient-pattern
+  - interactive shells in containers
 - Alerts forwarded to [Falcosidekick](falcosidekick.md) via gRPC
 
 ## Making changes

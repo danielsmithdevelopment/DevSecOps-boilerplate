@@ -1,6 +1,6 @@
 # Observability stack
 
-Full Grafana LGTM+ platform with OpenTelemetry, profiling, frontend telemetry, load testing, incident response, and optional runtime security tooling.
+Full Grafana LGTM+ platform with OpenTelemetry, profiling, frontend telemetry, load testing, incident response, optional runtime security tooling, and a **JWT-gated Cloudflare Worker** that closes the static public DSN / open Faro collector attack vector.
 
 > **Full documentation:** [docs/observability/](../../docs/observability/README.md) — one page per component with configuration and official resource links.
 
@@ -14,10 +14,11 @@ Full Grafana LGTM+ platform with OpenTelemetry, profiling, frontend telemetry, l
 | **Profiles** | Pyroscope | Continuous profiling |
 | **Visualization** | Grafana | Dashboards, Explore, correlations |
 | **Auto-instrumentation** | Beyla | eBPF HTTP/gRPC metrics & traces |
-| **Frontend RUM** | Alloy Faro receiver (`:8027`) | Browser telemetry from Grafana Faro SDK |
-| **Load testing** | k6 (`--profile loadtest`) | Prometheus remote-write to Mimir |
-| **Alerting** | Alertmanager, Mimir rules | Route alerts to OnCall |
-| **Incidents** | Grafana OnCall OSS | On-call schedules & escalations |
+| **Frontend RUM** | Faro → Worker → Alloy (`:8027`) | Browser telemetry via short-lived JWT proxy |
+| **Ingest proxy** | [`worker/`](./worker/) | Cloudflare Worker: JWT, rate limit, fingerprint, symbolication |
+| **Browser SDK helpers** | [`faro/`](./faro/) | Faro init + fingerprint + token refresh |
+| **Load / synthetic** | k6 (`--profile loadtest` / `synthetic`) | Prometheus remote-write to Mimir |
+| **Alerting** | Alertmanager, Loki/Mimir rules, Grafana OnCall | Route pages by severity |
 | **Security** | Falco, Falco Talon, Tetragon, Wazuh | Runtime detection & response (optional overlay) |
 
 ## Quick start
@@ -34,30 +35,31 @@ docker compose up -d
 | http://localhost:9090 | Prometheus |
 | http://localhost:9093 | Alertmanager |
 | http://localhost:8090 | OnCall engine |
-| http://localhost:8027 | Faro collector (Alloy) |
+| http://localhost:8027 | Faro collector (Alloy — keep private; public traffic goes through the Worker) |
 | http://localhost:5601 | Wazuh dashboard (security overlay) |
 
-### With task-runner
+### JWT-gated frontend ingest (production pattern)
 
 ```bash
-cd task-runner
-cp .env.example .env
-docker compose up -d
-docker compose --profile loadtest run --rm k6
+cd worker && npm install
+# configure wrangler.toml ALLOY_INGEST_URL / ALLOWED_ORIGINS / PROJECT_ID
+echo "$JWT_SIGNING_KEY" | npx wrangler secret put JWT_SIGNING_KEY
+npx wrangler deploy
 ```
 
-### Security overlay (Linux + eBPF)
+In the browser, use the Faro helpers:
 
-```bash
-docker compose -f docker/observability/docker-compose.yaml up -d
-docker compose -f docker/observability/docker-compose.security.yaml up -d
+```ts
+import { initGatedFaro } from './faro/src/faro-init';
+
+await initGatedFaro({
+  workerUrl: 'https://telemetry-ingest.workers.dev/collect',
+  tokenUrl: '/api/telemetry/token',
+  app: { name: 'frontend', version: '1.0.0' },
+});
 ```
 
-**Falco → Falcosidekick → Falco Talon** automates response to runtime threats. **Tetragon** adds Cilium eBPF process/network observability. **Wazuh** provides SIEM/HIDS (simplified dev layout).
-
-## Frontend telemetry (Faro)
-
-Point the [Grafana Faro Web SDK](https://grafana.com/docs/grafana-cloud/monitor-applications/frontend-observability/) at Alloy:
+Local compose without a Worker can still point Faro at Alloy directly (not for public internet):
 
 ```javascript
 import { initializeFaro } from '@grafana/faro-web-sdk';
@@ -67,6 +69,25 @@ initializeFaro({
   app: { name: 'wallet-auth-frontend', version: '1.0.0' },
 });
 ```
+
+### With task-runner
+
+```bash
+cd task-runner
+cp .env.example .env
+docker compose up -d
+docker compose --profile loadtest run --rm k6
+# or: docker compose --profile synthetic run --rm k6-synthetic
+```
+
+### Security overlay (Linux + eBPF)
+
+```bash
+docker compose -f docker/observability/docker-compose.yaml up -d
+docker compose -f docker/observability/docker-compose.security.yaml up -d
+```
+
+**Falco → Falcosidekick → Falco Talon** automates response to runtime threats. **Tetragon** ships Monitor-mode policies (`policy-no-package-install.yaml`, `policy-no-exfil.yaml`) — flip `Post` → `Sigkill` after baselining. **Wazuh** mounts `configs/security/wazuh/ossec.conf` for FIM + syslog + vulnerability detection.
 
 ## OnCall setup
 
@@ -81,20 +102,15 @@ All images use explicit version tags (no `:latest`). See `docker-compose.yaml` f
 ## Architecture
 
 ```
-Apps ──OTLP──► OTel Collector ──┬──► Tempo (traces)
-                                ├──► Mimir  (metrics)
-                                └──► Loki   (logs)
-
-Browser ──Faro──► Alloy ────────┬──► Tempo / Loki
-Docker logs ──► Alloy ──────────┘
-
-Beyla (eBPF) ──OTLP──► OTel Collector
-
-Prometheus ──remote_write──► Mimir ──rules──► Alertmanager ──► OnCall
-
-Falco ──► Falcosidekick ──► Falco Talon (response actions)
-Tetragon ──events──► stdout / metrics (:2112)
-Wazuh manager ──► indexer ──► dashboard
+Browser ──Faro + JWT──► Cloudflare Worker ──► Alloy Faro (:8027)
+                              │                 ├──► Loki (errors + fingerprints)
+                              │                 └──► Tempo
+Apps ──OTLP──► OTel Collector / Alloy ──┬──► Tempo
+                                        ├──► Mimir  (via delta→cumulative + labeldrop)
+                                        └──► Loki
+Beyla (eBPF) ──OTLP──► Collector
+Falco / Tetragon / Wazuh ──► Alloy syslog :1516 / stdout ──► Loki
+Prometheus ──remote_write──► Mimir ──rules──► Alertmanager ──► OnCall / PagerDuty
 ```
 
 ## Config layout
@@ -103,14 +119,17 @@ Wazuh manager ──► indexer ──► dashboard
 docker/observability/
 ├── docker-compose.yaml           # core stack
 ├── docker-compose.security.yaml  # Falco, Talon, Tetragon, Wazuh
-├── configs/
-│   ├── alloy/                    # logs, Faro, secondary OTLP ingress
-│   ├── loki/ tempo/ mimir/ pyroscope/
-│   ├── prometheus/ alertmanager/
-│   ├── otel-collector/
-│   ├── grafana/                  # datasources + dashboards
-│   ├── k6/
-│   └── security/                 # falco, falco-talon, tetragon
+├── worker/                       # Cloudflare Worker (JWT-gated ingest)
+├── faro/                         # browser Faro init + fingerprinting
+└── configs/
+    ├── alloy/                    # logs, Faro, OTLP, cardinality controls
+    ├── loki/                     # retention footgun fix + LogQL alert rules
+    ├── tempo/ mimir/ pyroscope/
+    ├── prometheus/ alertmanager/
+    ├── otel-collector/
+    ├── grafana/                  # datasources, dashboards, contact points
+    ├── k6/                       # loadtest.js + synthetic-check.js
+    └── security/                 # falco, falco-talon, tetragon, wazuh/ossec.conf
 ```
 
 Legacy per-app configs under `task-runner/configs/` and `docker/grafana-stack/` are superseded by this shared stack; app compose files only override Prometheus scrape targets.
