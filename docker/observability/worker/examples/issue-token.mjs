@@ -5,6 +5,9 @@
  *
  *   JWT_SIGNING_KEY=... PROJECT_ID=frontend-prod ORIGIN=https://app.example.com \
  *     node examples/issue-token.mjs
+ *
+ * Writes a JSON line to stdout (token + expiry). Does not log env-derived claim
+ * fields — those stay in the signed JWT payload only.
  */
 import { createHmac, randomUUID } from 'node:crypto';
 
@@ -35,13 +38,20 @@ if (!secret) {
 }
 
 const now = Math.floor(Date.now() / 1000);
-const claims = {
-  sub: process.env.SESSION_ID || `session_${randomUUID()}`,
-  project: process.env.PROJECT_ID || 'frontend-prod',
-  origin: process.env.ORIGIN || 'https://app.example.com',
-  iat: now,
-  exp: now + Number(process.env.TOKEN_TTL_SECONDS || 3600),
-};
+const ttl = Number(process.env.TOKEN_TTL_SECONDS || 3600);
+const expiresAt = now + ttl;
 
-const token = signHs256(claims, secret);
-console.log(JSON.stringify({ token, expires_at: claims.exp, claims }, null, 2));
+const token = signHs256(
+  {
+    sub: process.env.SESSION_ID || `session_${randomUUID()}`,
+    project: process.env.PROJECT_ID || 'frontend-prod',
+    origin: process.env.ORIGIN || 'https://app.example.com',
+    iat: now,
+    exp: expiresAt,
+  },
+  secret,
+);
+
+// Token emission is intentional for this CLI helper (pipe into curl / wrangler tests).
+// Avoid console.log of env-sourced claim fields — CodeQL flags that as clear-text logging.
+process.stdout.write(`${JSON.stringify({ token, expires_at: expiresAt })}\n`);

@@ -1,6 +1,6 @@
 module github.com/danielsmithdevelopment/DevSecOps-boilerplate
 
-go 1.25.11
+go 1.25.12
 
 require (
 	github.com/lib/pq v1.10.9
